@@ -16,7 +16,7 @@ The file corpus represents UC Santa Cruz capital project records across multiple
 Implications for implementation agents:
 
 - Extraction robustness matters more than elegant minimal code; fallback behavior and failure classification should be explicit.
-- Memory-aware processing is essential because drawing-heavy files can spike RAM usage unpredictably.
+- Memory-aware processing is essential because drawing-heavy files can spike RAM usage unpredictably. (Desktops and laptops running this will have at least 16GB, but also have other software running, people will not be using the computers while its running though.)
 - Idempotent retries and accurate failure semantics are critical because poor OCR/legacy scans can cause intermittent extractor failures.
 - Throughput tuning must assume mixed workloads (tiny text docs + very large drawings) rather than homogeneous files.
 - Logging should capture enough context (file type/stage/error class) to support operational triage at scale.
@@ -103,7 +103,7 @@ Agents must produce:
 
 ## 5) Target Repository Structure
 
-Use this structure unless a strong implementation reason requires minor deviation:
+Use this structure unless a strong implementation reason requires deviation:
 
 ```text
 desktop_archives_scraper/
@@ -239,17 +239,6 @@ Parity checks:
 
 - Compare inserted/updated rows and failure-table behavior against `archives_scraper` expectations.
 
-Concurrency checks:
-
-- Run 2 to 4 concurrent desktop instances (and optionally Linux scraper concurrently).
-- Confirm benign handling of duplicate claims/writes.
-- Confirm failure rows represent real processing errors only.
-
-Performance checks:
-
-- Measure transaction/write-call volume before and after batching.
-- Validate throughput and memory stability with large-format drawings.
-
 ## 11) Immediate Next Build Step
 
 Start Phase 1 by porting minimal runnable modules from `archives_scraper` (CLI, worker, DB core, logging, extraction, embedding), then run a small end-to-end smoke test before any optimization beyond batched writes.
@@ -294,3 +283,4 @@ Usage rule for agents:
 
 - Treat `archives_scraper` references as primary authority.
 - Use `file_code_tagger` references only when they improve desktop adaptation without violating MVP scope.
+- IMPORTANT: Do not make any changes to either `archives_scraper` or `file_code_tagger` codebases; these are read-only reference points for implementation guidance.

@@ -31,7 +31,7 @@ from desktop_archives_scraper.worker import run_worker
 
 # Load environment variables early so Click options using envvar=... can
 # see values from a local .env file.
-load_dotenv()
+load_dotenv(override=False)
 
 
 @click.command()

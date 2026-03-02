@@ -9,5 +9,14 @@ wheels/
 # Virtual environments
 .venv
 
-# Local planning/research snapshots (not for source control)
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# development materials
 research/
+developemnt/
+
+# Visual Studio Code settings
+.vscode/

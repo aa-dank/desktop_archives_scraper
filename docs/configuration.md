@@ -1,5 +1,11 @@
 # Configuration
 
+## Dotenv Support
+
+- CLI loads `.env` automatically at startup via `python-dotenv`.
+- Existing shell environment variables are not overwritten by `.env` values.
+- Recommended setup: copy `.env.example` to `.env` and edit values locally.
+
 ## Required Environment Variables
 
 - `DB_HOST`

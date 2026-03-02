@@ -27,7 +27,13 @@ See `docs/architecture.md` for the detailed reuse map.
 	uv sync
 	```
 
-2. Set required environment variables (PowerShell example):
+2. Create a local env file:
+
+	```powershell
+	Copy-Item .env.example .env
+	```
+
+3. Set required values in `.env` (or export in shell). PowerShell example:
 
 	```powershell
 	$env:DB_HOST = "..."
@@ -38,13 +44,13 @@ See `docs/architecture.md` for the detailed reuse map.
 	$env:FILE_SERVER_MOUNT = "N:\\PPDO\\Records"
 	```
 
-3. Verify CLI:
+4. Verify CLI:
 
 	```powershell
 	uv run python -m desktop_archives_scraper.cli --help
 	```
 
-4. Run a smoke batch:
+5. Run a smoke batch:
 
 	```powershell
 	uv run python -m desktop_archives_scraper.cli --limit 25 --log-level INFO

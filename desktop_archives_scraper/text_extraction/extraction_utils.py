@@ -2,6 +2,7 @@
 
 # --- imports ---
 import logging
+import os
 import re
 import sys
 import warnings
@@ -14,6 +15,43 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def compute_max_image_pixels() -> int:
+    """
+    Derive a safe Pillow MAX_IMAGE_PIXELS value from available system RAM.
+
+    Heuristic
+    ---------
+    - Read total physical RAM via psutil.
+    - Reserve 2 GB for the OS and other processes.
+    - Assume worst-case 4 bytes per pixel (RGBA).
+    - Clamp to [Pillow default (178_956_970), 2_000_000_000].
+
+    The result can always be overridden by setting the ``IMAGE_MAX_PIXELS``
+    environment variable before the process starts.
+    """
+    PILLOW_DEFAULT = 178_956_970
+    BYTES_PER_PIXEL = 4
+    OS_RESERVE_BYTES = 2 * 1024 ** 3  # 2 GB
+
+    try:
+        import psutil
+        total_ram = psutil.virtual_memory().total
+    except Exception:
+        logger.warning("psutil unavailable; using Pillow default MAX_IMAGE_PIXELS (%d)", PILLOW_DEFAULT)
+        return PILLOW_DEFAULT
+
+    usable = max(total_ram - OS_RESERVE_BYTES, 0)
+    computed = usable // BYTES_PER_PIXEL
+    result = max(PILLOW_DEFAULT, min(computed, 2_000_000_000))
+    logger.debug(
+        "MAX_IMAGE_PIXELS heuristic: total_ram=%d MB, usable=%d MB, pixels=%d",
+        total_ram // 1024 ** 2,
+        usable // 1024 ** 2,
+        result,
+    )
+    return result
 
 try:
     from unidecode import unidecode  # nicer fallback for weird glyphs

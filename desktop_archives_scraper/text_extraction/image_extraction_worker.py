@@ -6,9 +6,15 @@ from pathlib import Path
 import sys
 from typing import Optional
 
-import pytesseract
+import os
 
-from .extraction_utils import ImageOCRUtils, OCRUtils, SubprocessUtils
+import pytesseract
+from PIL import Image
+
+from .extraction_utils import ImageOCRUtils, OCRUtils, SubprocessUtils, compute_max_image_pixels
+
+# Allow explicit override via IMAGE_MAX_PIXELS env var, otherwise derive from RAM.
+Image.MAX_IMAGE_PIXELS = int(os.getenv("IMAGE_MAX_PIXELS", str(compute_max_image_pixels())))
 
 def _parse_config(config_json_arg: str) -> dict:
     config = json.loads(config_json_arg)

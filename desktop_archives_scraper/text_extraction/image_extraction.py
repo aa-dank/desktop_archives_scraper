@@ -13,6 +13,11 @@ from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
 
+from .extraction_utils import compute_max_image_pixels
+
+# Allow explicit override via IMAGE_MAX_PIXELS env var, otherwise derive from RAM.
+Image.MAX_IMAGE_PIXELS = int(os.getenv("IMAGE_MAX_PIXELS", str(compute_max_image_pixels())))
+
 IMAGE_OCR_PIXEL_THRESHOLD = 30_000_000
 IMAGE_OCR_FILESIZE_THRESHOLD_BYTES = 50 * 1024 * 1024
 IMAGE_OCR_SUBPROCESS_TIMEOUT_S = int(os.getenv("IMAGE_OCR_SUBPROCESS_TIMEOUT_S", "300"))

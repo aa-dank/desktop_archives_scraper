@@ -32,7 +32,7 @@ def main() -> int:
             raise ValueError("--params-json must decode to a JSON object")
 
         SubprocessUtils.apply_memory_limit(args.mem_mb, stderr=sys.stderr)
-        ocrmypdf.ocr(input_file=args.input, output_file=args.output, **ocr_params)
+        ocrmypdf.ocr(args.input, args.output, **ocr_params)
         return 0
     except Exception as exc:
         print(f"ocr worker failed: {exc}", file=sys.stderr)

@@ -27,6 +27,7 @@ from desktop_archives_scraper.text_extraction.extraction_utils import (
 )
 
 import numpy as np
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func
 
@@ -152,7 +153,7 @@ def next_files_needing_content(
     *,
     extensions: set[str] | None = None,
     limit: int = 10,
-    include_failures: bool = False,
+    failure_retry_treshold: int | None = None,
     randomize: bool = False,
 ) -> list:
     """
@@ -170,9 +171,10 @@ def next_files_needing_content(
         If provided, only return files with these extensions (case-insensitive).
     limit : int, default=10
         Maximum number of files to return.
-    include_failures : bool, default=False
-        If True, include files that have failure records (for retry).
-        If False (default), exclude files with any failure record.
+    failure_retry_treshold : int | None, default=None
+        If set, include files with failure records only when attempts are
+        below this value. If None (default), exclude all files with
+        any failure record.
     randomize : bool, default=False
         If True, randomize file order before applying limit.
     
@@ -197,9 +199,17 @@ def next_files_needing_content(
     query = query.filter(FileContent.file_hash.is_(None))
     
     # Apply failure filtering
-    if not include_failures:
+    if failure_retry_treshold is None:
         # Exclude files that have a failure record
         query = query.filter(FileContentFailure.file_hash.is_(None))
+    else:
+        # Include files with no failures OR failures below retry threshold
+        query = query.filter(
+            or_(
+                FileContentFailure.file_hash.is_(None),
+                FileContentFailure.attempts < failure_retry_treshold,
+            )
+        )
     
     if randomize:
         query = query.order_by(func.random())
@@ -209,7 +219,10 @@ def next_files_needing_content(
     query = query.limit(limit)
     
     files = query.all()
-    logger.debug(f"Fetched {len(files)} files needing content extraction (include_failures={include_failures})")
+    logger.debug(
+        f"Fetched {len(files)} files needing content extraction "
+        f"(failure_retry_treshold={failure_retry_treshold})"
+    )
     return files
 
 
@@ -467,7 +480,7 @@ def run_worker(
     max_chars: int | None = None,
     backoff_seconds: float | None = None,
     enable_embedding: bool = True,
-    include_failures: bool = False,
+    failure_retry_treshold: int | None = None,
     randomize: bool = False,
 ) -> int:
     """
@@ -496,9 +509,10 @@ def run_worker(
         uses poll_seconds.
     enable_embedding : bool, default=True
         Whether to generate embeddings.
-    include_failures : bool, default=False
-        If True, include files with failure records for retry.
-        If False (default), exclude files that have previously failed.
+    failure_retry_treshold : int | None, default=None
+        If set, include files with failure records only when attempts are
+        below this value. If None (default), exclude files that have
+        previously failed.
     randomize : bool, default=False
         If True, randomize file retrieval order each batch.
     
@@ -547,7 +561,7 @@ def run_worker(
             "limit": limit,
             "extensions": list(extensions) if extensions else None,
             "enable_embedding": enable_embedding,
-            "include_failures": include_failures,
+            "failure_retry_treshold": failure_retry_treshold,
             "randomize": randomize,
         }
     )
@@ -612,7 +626,7 @@ def run_worker(
                     session,
                     extensions=extensions,
                     limit=batch_limit,
-                    include_failures=include_failures,
+                    failure_retry_treshold=failure_retry_treshold,
                     randomize=randomize,
                 )
                 

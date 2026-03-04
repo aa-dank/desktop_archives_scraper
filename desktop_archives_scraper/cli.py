@@ -118,12 +118,11 @@ load_dotenv(override=False)
     help="Output logs in JSON format",
 )
 @click.option(
-    "--include-failures/--exclude-failures",
-    "include_failures",
-    default=False,
-    envvar="INCLUDE_FAILURES",
-    show_default=True,
-    help="Include/exclude files with previous failures for retry",
+    "--failure_retry_treshold",
+    type=click.IntRange(min=1),
+    envvar="FAILURE_RETRY_TRESHOLD",
+    default=None,
+    help="Retry files with previous failures only when failure attempts are below this value",
 )
 @click.option(
     "--randomize/--no-randomize",
@@ -151,7 +150,7 @@ def main(
     log_level: str,
     log_file: str | None,
     json_logs: bool,
-    include_failures: bool,
+    failure_retry_treshold: int | None,
     randomize: bool,
     dry_run: bool,
 ) -> None:
@@ -251,7 +250,7 @@ def main(
             extensions=ext_set,
             max_chars=max_chars,
             enable_embedding=enable_embedding,
-            include_failures=include_failures,
+            failure_retry_treshold=failure_retry_treshold,
             randomize=randomize,
             dry_run=dry_run,
         )

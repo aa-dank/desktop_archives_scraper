@@ -26,7 +26,7 @@
 - `MAX_CHARS`
 - `ENABLE_EMBEDDING` (`true`/`false`)
 - `EMBEDDER` (`minilm`)
-- `INCLUDE_FAILURES` (`true`/`false`)
+- `FAILURE_RETRY_TRESHOLD` (int; include failed files only when attempts are below this value)
 - `RANDOMIZE` (`true`/`false`)
 - `LOG_LEVEL`, `LOG_FILE`, `JSON_LOGS`
 
@@ -43,5 +43,5 @@ Inherited from extractor modules (use only if needed for tuning):
 ```powershell
 uv run python -m desktop_archives_scraper.cli --help
 uv run python -m desktop_archives_scraper.cli --limit 100 --poll-batch-size 20 --write-batch-size 50
-uv run python -m desktop_archives_scraper.cli --extensions pdf,docx,pptx --include-failures
+uv run python -m desktop_archives_scraper.cli --extensions pdf,docx,pptx --failure_retry_treshold 2
 ```

@@ -62,8 +62,9 @@ See `docs/architecture.md` for the detailed reuse map.
 - `WRITE_BATCH_SIZE`: processed file payloads buffered before DB flush (default `25`)
 - `COMMIT_INTERVAL_SECONDS`: max seconds before forced flush of pending writes (default `5.0`)
 - `POLL_SECONDS`: sleep between loops (default `5.0`)
+- `MAX_RUNTIME_SECONDS`: wall-clock seconds after which the worker exits cleanly. Any in-progress file (including OCR) finishes first; pending DB writes are flushed before exit. Poll/idle sleeps are automatically capped to the remaining budget so overshoot is bounded to at most one file's processing time.
 
-These can be set with env vars or CLI options.
+These can be set with env vars or CLI options (`--max-runtime-seconds`, etc.).
 
 ## Operational Notes
 

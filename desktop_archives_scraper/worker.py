@@ -476,6 +476,7 @@ def run_worker(
     write_batch_size: int = 25,
     commit_interval_seconds: float = 5.0,
     limit: int | None = None,
+    max_runtime_seconds: float | None = None,
     extensions: set[str] | None = None,
     max_chars: int | None = None,
     backoff_seconds: float | None = None,
@@ -500,6 +501,9 @@ def run_worker(
         Seconds to sleep between polling when no work found.
     limit : int | None
         Total files to process before exiting. If None, run continuously.
+    max_runtime_seconds : float | None
+        Maximum wall-clock seconds before exiting cleanly. If None, no
+        runtime-based limit is applied.
     extensions : set[str] | None
         If provided, only process files with these extensions.
     max_chars : int | None
@@ -559,6 +563,7 @@ def run_worker(
             "write_batch_size": write_batch_size,
             "commit_interval_seconds": commit_interval_seconds,
             "limit": limit,
+            "max_runtime_seconds": max_runtime_seconds,
             "extensions": list(extensions) if extensions else None,
             "enable_embedding": enable_embedding,
             "failure_retry_treshold": failure_retry_treshold,
@@ -570,8 +575,17 @@ def run_worker(
     pending_content_rows: list[dict] = []
     pending_failure_rows: list[dict] = []
     last_flush_ts = time.time()
+    worker_start_ts = time.time()
 
     idle_sleep_seconds = poll_seconds if backoff_seconds is None else backoff_seconds
+
+    def _capped_sleep(duration: float) -> None:
+        """Sleep for `duration` seconds, capped to the remaining runtime budget."""
+        if max_runtime_seconds is not None:
+            remaining = max_runtime_seconds - (time.time() - worker_start_ts)
+            duration = min(duration, max(remaining, 0.0))
+        if duration > 0:
+            time.sleep(duration)
 
     def flush_pending(force: bool = False) -> None:
         nonlocal pending_content_rows, pending_failure_rows, last_flush_ts
@@ -609,6 +623,17 @@ def run_worker(
     
     try:
         while True:
+            if max_runtime_seconds is not None:
+                elapsed = time.time() - worker_start_ts
+                if elapsed >= max_runtime_seconds:
+                    if not dry_run:
+                        flush_pending(force=True)
+                    logger.info(
+                        f"Max runtime reached, exiting after {elapsed:.1f}s",
+                        extra={"total_processed": total_processed},
+                    )
+                    return 0
+
             with session_factory() as session:
                 # Fetch next batch
                 remaining = None
@@ -639,7 +664,7 @@ def run_worker(
                         return 0
                     
                     logger.debug(f"Sleeping {idle_sleep_seconds}s before next poll")
-                    time.sleep(idle_sleep_seconds)
+                    _capped_sleep(idle_sleep_seconds)
                     continue
                 
                 logger.info(f"Processing batch of {len(files)} files")
@@ -685,7 +710,7 @@ def run_worker(
                 
                 # Brief sleep before next batch
                 if poll_seconds > 0:
-                    time.sleep(poll_seconds)
+                    _capped_sleep(poll_seconds)
     
     except KeyboardInterrupt:
         if not dry_run:

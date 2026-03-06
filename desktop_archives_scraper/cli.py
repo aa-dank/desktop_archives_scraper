@@ -118,6 +118,12 @@ load_dotenv(override=False)
     help="Output logs in JSON format",
 )
 @click.option(
+    "--max-runtime-seconds",
+    type=float,
+    envvar="MAX_RUNTIME_SECONDS",
+    help="Maximum runtime in seconds before exiting cleanly.",
+)
+@click.option(
     "--failure_retry_treshold",
     type=click.IntRange(min=1),
     envvar="FAILURE_RETRY_TRESHOLD",
@@ -150,6 +156,7 @@ def main(
     log_level: str,
     log_file: str | None,
     json_logs: bool,
+    max_runtime_seconds: float | None,
     failure_retry_treshold: int | None,
     randomize: bool,
     dry_run: bool,
@@ -247,6 +254,7 @@ def main(
             write_batch_size=resolved_write_batch_size,
             commit_interval_seconds=resolved_commit_interval,
             limit=limit,
+            max_runtime_seconds=max_runtime_seconds,
             extensions=ext_set,
             max_chars=max_chars,
             enable_embedding=enable_embedding,

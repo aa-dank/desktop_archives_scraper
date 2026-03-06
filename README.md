@@ -19,6 +19,17 @@ This repo exists to accelerate historical backlog processing while Linux product
 
 See `docs/architecture.md` for the detailed reuse map.
 
+## Prerequisites
+
+The following non-Python tools must be installed on each machine running the scraper:
+
+| Tool | Required for | Notes |
+|---|---|---|
+| **Microsoft Word** | `.doc` extraction | Used via Windows COM (`Word.Application`). No LibreOffice needed. |
+| **Microsoft PowerPoint** | `.ppt`, `.pps` extraction | Used via Windows COM (`PowerPoint.Application`). No LibreOffice needed. |
+| **Tesseract OCR** | Image OCR (`.png`, `.jpg`, etc.) and PDF OCR fallback | Install from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki). Ensure `tesseract.exe` is on `PATH`, or set `TESSERACT_CMD` env var to the full path (e.g. `C:\Program Files\Tesseract-OCR\tesseract.exe`). |
+| **Ghostscript** | PDF OCR (required by `ocrmypdf`) | Install from [ghostscript.com](https://www.ghostscript.com/). Ensure `gswin64c.exe` is on `PATH`. |
+
 ## Quick Start
 
 1. Install dependencies:

@@ -1,3 +1,25 @@
+"""Isolated subprocess worker for Office document text extraction.
+
+This module is invoked as ``python -m ...office_extraction_worker`` by
+``run_office_worker()``.  Running extraction in a child process isolates the
+main worker from COM/LibreOffice crashes, memory overruns, and hung GUI
+dialogs that can occur with large or malformed legacy Office files.
+
+Flow
+----
+1. Parent calls ``run_office_worker()`` in ``office_doc_extraction.py``.
+2. That function spawns this module as a subprocess, passing ``--input`` and
+   ``--config-json``.
+3. This module extracts text (using the same extractor classes) and writes a
+   single JSON object to stdout: ``{"ok": true, "text": "..."}`` on success or
+   ``{"ok": false, "error": {...}}`` on failure.
+4. The parent reads stdout, parses the JSON, and raises ``TextExtractionError``
+   if ``ok`` is False.
+
+The ``OFFICE_WORKER_MODE`` env var is set to ``"1"`` inside the subprocess so
+that extractor ``__call__`` methods skip the subprocess-routing guard and
+proceed with direct in-process extraction.
+"""
 import argparse
 import json
 import logging
@@ -20,17 +42,28 @@ from .office_doc_extraction import (
 
 logger = logging.getLogger(__name__)
 
+# Sets of extensions routed to each extractor builder.
 WORD_EXTENSIONS = {"doc", "docx", "docm"}
 PRESENTATION_EXTENSIONS = {"ppt", "pps", "pptx", "pptm", "ppsx"}
 SPREADSHEET_EXTENSIONS = {"xls", "xlsx", "xlsm"}
 
 
 def _configure_logging(debug: bool) -> None:
+    """Configure root logging to stderr.
+
+    All worker log output goes to stderr so it does not contaminate the JSON
+    payload written to stdout.
+    """
     level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(level=level, stream=sys.stderr, format="%(levelname)s: %(message)s")
 
 
 def _parse_config(config_json_arg: str | None) -> dict:
+    """Decode the ``--config-json`` CLI argument to a plain dict.
+
+    Returns an empty dict when the argument is absent or empty.
+    Raises ``ValueError`` if the JSON is valid but not an object.
+    """
     if not config_json_arg:
         return {}
 
@@ -41,6 +74,11 @@ def _parse_config(config_json_arg: str | None) -> dict:
 
 
 def _int_config(config: dict, *keys: str, default: int) -> int:
+    """Walk a nested config dict by *keys* and return an int value.
+
+    Returns *default* if any key is missing, the path is not a dict at some
+    level, or the final value cannot be converted to int.
+    """
     node = config
     for key in keys:
         if not isinstance(node, dict):
@@ -55,6 +93,10 @@ def _int_config(config: dict, *keys: str, default: int) -> int:
 
 
 def _bool_config(config: dict, *keys: str, default: bool) -> bool:
+    """Walk a nested config dict by *keys* and return a bool value.
+
+    Returns *default* if any key is missing or the path does not exist.
+    """
     node = config
     for key in keys:
         if not isinstance(node, dict):
@@ -66,6 +108,12 @@ def _bool_config(config: dict, *keys: str, default: bool) -> bool:
 
 
 def _reason_from_exception(exc: BaseException) -> tuple[str, bool]:
+    """Map an exception to a ``(reason, retryable)`` pair for the error payload.
+
+    ``reason`` is a short snake_case token included in the JSON error object so
+    the parent process can distinguish failure modes without parsing free-form
+    text.  ``retryable`` hints whether the parent should schedule a retry.
+    """
     message = str(exc).lower()
     if "timed out" in message:
         return "timeout", True
@@ -81,6 +129,11 @@ def _reason_from_exception(exc: BaseException) -> tuple[str, bool]:
 
 
 def _build_word_extractor(config: dict) -> WordFileTextExtractor:
+    """Instantiate a ``WordFileTextExtractor`` from the worker config dict.
+
+    Reads ``soffice_path`` (LibreOffice fallback binary) and
+    ``max_output_chars`` from *config*, using sensible defaults when absent.
+    """
     soffice_path = str(config.get("soffice_path", "soffice"))
     max_output_chars = _int_config(config, "max_output_chars", default=5_000_000)
     return WordFileTextExtractor(
@@ -90,6 +143,11 @@ def _build_word_extractor(config: dict) -> WordFileTextExtractor:
 
 
 def _build_presentation_extractor(config: dict) -> PresentationTextExtractor:
+    """Instantiate a ``PresentationTextExtractor`` from the worker config dict.
+
+    Reads ``soffice_path``, ``include_ppt_notes``, and the ``ppt`` sub-object
+    (``max_slides``, ``max_chars_per_slide``) from *config*.
+    """
     soffice_path = str(config.get("soffice_path", "soffice"))
     include_notes = _bool_config(config, "include_ppt_notes", default=True)
     max_slides = _int_config(config, "ppt", "max_slides", default=500)
@@ -103,6 +161,12 @@ def _build_presentation_extractor(config: dict) -> PresentationTextExtractor:
 
 
 def _build_spreadsheet_extractor(config: dict) -> SpreadsheetTextExtractor:
+    """Instantiate a ``SpreadsheetTextExtractor`` from the worker config dict.
+
+    Reads ``soffice_path`` and the ``xlsx`` sub-object (``max_sheets``,
+    ``max_rows_per_sheet``, ``max_cols_per_sheet``, ``max_total_cells``) from
+    *config*.
+    """
     soffice_path = str(config.get("soffice_path", "soffice"))
     max_sheets = _int_config(config, "xlsx", "max_sheets", default=20)
     max_rows_per_sheet = _int_config(config, "xlsx", "max_rows_per_sheet", default=5_000)
@@ -119,6 +183,13 @@ def _build_spreadsheet_extractor(config: dict) -> SpreadsheetTextExtractor:
 
 
 def _extract_text(input_path: Path, config: dict) -> str:
+    """Dispatch to the correct extractor based on file extension and return text.
+
+    Builds a fresh extractor instance from *config* on each call so per-file
+    config overrides (e.g. ``max_output_chars``) are respected.
+
+    Raises ``TextExtractionError`` for unrecognised extensions.
+    """
     ext = input_path.suffix.lower().lstrip(".")
 
     if ext in WORD_EXTENSIONS:
@@ -132,11 +203,25 @@ def _extract_text(input_path: Path, config: dict) -> str:
 
 
 def _emit_json(payload: dict) -> int:
+    """Serialise *payload* to stdout as a single JSON line and return 0.
+
+    The parent process reads exactly one JSON object from this subprocess's
+    stdout.  Writing without a trailing newline keeps the output unambiguous
+    even if any library inadvertently writes a blank line to stdout.
+    """
     print(json.dumps(payload), end="")
     return 0
 
 
 def main() -> int:
+    """Entry point for the office extraction subprocess.
+
+    Parses CLI arguments, sets up the worker environment, runs the appropriate
+    extractor, and writes a JSON result object to stdout.  All log output goes
+    to stderr so it does not interfere with the JSON payload.
+
+    Returns an exit code (0 on success, 1 on extraction failure).
+    """
     parser = argparse.ArgumentParser(description="Run office extraction in an isolated subprocess")
     parser.add_argument("--input", required=True, help="Path to office document")
     parser.add_argument("--config-json", default="{}", help="Worker config JSON")

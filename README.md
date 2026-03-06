@@ -21,14 +21,79 @@ See `docs/architecture.md` for the detailed reuse map.
 
 ## Prerequisites
 
-The following non-Python tools must be installed on each machine running the scraper:
+The following must be installed on each Windows machine running the scraper:
 
 | Tool | Required for | Notes |
 |---|---|---|
+| **Python 3.13+** | Runtime | See install steps below. |
+| **uv** | Dependency management | See install steps below. |
 | **Microsoft Word** | `.doc` extraction | Used via Windows COM (`Word.Application`). No LibreOffice needed. |
 | **Microsoft PowerPoint** | `.ppt`, `.pps` extraction | Used via Windows COM (`PowerPoint.Application`). No LibreOffice needed. |
-| **Tesseract OCR** | Image OCR (`.png`, `.jpg`, etc.) and PDF OCR fallback | Install from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki). Ensure `tesseract.exe` is on `PATH`, or set `TESSERACT_CMD` env var to the full path (e.g. `C:\Program Files\Tesseract-OCR\tesseract.exe`). |
-| **Ghostscript** | PDF OCR (required by `ocrmypdf`) | Install from [ghostscript.com](https://www.ghostscript.com/). Ensure `gswin64c.exe` is on `PATH`. |
+| **Tesseract OCR** | Image OCR (`.png`, `.jpg`, etc.) and PDF OCR fallback | See install steps below. |
+| **Ghostscript** | PDF OCR (required by `ocrmypdf`) | See install steps below. |
+
+### Installing Python 3.13+
+
+Download the latest Python 3.13 installer from [python.org](https://www.python.org/downloads/windows/) and run it.
+Check **"Add python.exe to PATH"** during setup.
+
+Verify:
+
+```powershell
+python --version
+```
+
+### Installing uv
+
+Run the official installer in PowerShell (does not require admin):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Alternatively, install via winget:
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+Verify:
+
+```powershell
+uv --version
+```
+
+### Installing Tesseract OCR
+
+1. Download the latest Windows installer from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki) (choose the `tesseract-ocr-w64-setup-*.exe` file).
+2. Run the installer. The default install path is `C:\Program Files\Tesseract-OCR\`.
+3. Add Tesseract to your system `PATH`:
+   - Open **System Properties → Environment Variables**.
+   - Under **System variables**, edit `Path` and add `C:\Program Files\Tesseract-OCR`.
+4. Verify:
+
+```powershell
+tesseract --version
+```
+
+If you prefer not to modify `PATH`, set the `TESSERACT_CMD` environment variable instead:
+
+```powershell
+$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+### Installing Ghostscript
+
+1. Download the latest Windows 64-bit installer from [ghostscript.com](https://www.ghostscript.com/download/gsdnld.html) (choose `gs*w64.exe`).
+2. Run the installer (requires admin). The default install path is `C:\Program Files\gs\gs*\bin\`.
+3. Add Ghostscript to your system `PATH`:
+   - Open **System Properties → Environment Variables**.
+   - Under **System variables**, edit `Path` and add the `bin` directory, e.g. `C:\Program Files\gs\gs10.05.1\bin`.
+4. Verify:
+
+```powershell
+gswin64c --version
+```
 
 ## Quick Start
 

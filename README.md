@@ -147,5 +147,6 @@ These can be set with env vars or CLI options (`--max-runtime-seconds`, etc.).
 - Expected concurrent operation: Linux scraper + 3–4 desktop instances.
 - Worker writes use idempotent upserts to reduce duplicate-write noise.
 - Successful content upsert clears any existing failure row for that file hash.
+- The worker exits with code `3` on transient DB connection failures (e.g. the PostgreSQL server restarted). A simple restart wrapper script handles automatic recovery — see `run_with_retry.ps1` in the repo root.
 
 See `docs/operations.md` for multi-instance runbook guidance.

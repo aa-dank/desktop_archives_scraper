@@ -602,11 +602,18 @@ def run_worker(
             return
 
         with session_factory() as flush_session:
-            content_count, failure_count, cleared_count = persist_processing_batch(
-                flush_session,
-                content_rows=pending_content_rows,
-                failure_rows=pending_failure_rows,
-            )
+            try:
+                content_count, failure_count, cleared_count = persist_processing_batch(
+                    flush_session,
+                    content_rows=pending_content_rows,
+                    failure_rows=pending_failure_rows,
+                )
+            except Exception:
+                # Invalidate before the context manager exits so SQLAlchemy does
+                # not attempt a ROLLBACK on a dead connection, which would raise a
+                # secondary exception and obscure the original error.
+                flush_session.invalidate()
+                raise
 
         logger.info(
             "Flushed pending writes",

@@ -206,8 +206,28 @@ def main(
     ext_set = None
     if extensions:
         ext_set = set(ext.strip() for ext in extensions.split(",") if ext.strip())
-        logger.info(f"Filtering to extensions: {ext_set}")
-    
+
+    logger.info(
+        "Extraction settings",
+        extra={
+            "extensions": sorted(ext_set) if ext_set else "all",
+            "max_chars": max_chars,
+            "max_runtime_seconds": max_runtime_seconds,
+            "limit": limit,
+            "randomize": randomize,
+            "failure_retry_treshold": failure_retry_treshold,
+            "dry_run": dry_run,
+        },
+    )
+
+    logger.info(
+        "Embedding settings",
+        extra={
+            "enable_embedding": enable_embedding,
+            "embedder": embedder if enable_embedding else None,
+        },
+    )
+
     # Build extractors
     extractors = [
         PDFTextExtractor(),

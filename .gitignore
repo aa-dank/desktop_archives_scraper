@@ -20,3 +20,5 @@ development/
 
 # Visual Studio Code settings
 .vscode/
+
+*.log

@@ -4,13 +4,6 @@ Temporary high-throughput Windows desktop ingestion worker that writes to the sa
 
 This repo exists to accelerate historical backlog processing while Linux production ingestion continues in parallel.
 
-## Scope
-
-- Parity target: same logical DB behavior as `archives_scraper` for `file_contents` and `file_content_failures`.
-- No schema changes.
-- No Tika.
-- Date extraction/tagging is out of scope for v1.
-
 ## Architecture Sources
 
 - Primary source of truth: `archives_scraper`

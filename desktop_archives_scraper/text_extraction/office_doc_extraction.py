@@ -74,6 +74,63 @@ OFFICE_LEGACY_ALWAYS_SUBPROCESS = {"doc", "ppt", "pps", "xls"}
 OFFICE_MODERN_SIZE_GATED_SUBPROCESS = {"docx", "docm", "pptx", "pptm", "ppsx", "xlsx", "xlsm"}
 
 
+def _resolve_soffice_path(soffice_path: str) -> str:
+    """Resolve the LibreOffice executable path.
+
+    Resolution order:
+    1. Use *soffice_path* if it exists as a file.
+    2. Resolve *soffice_path* via PATH (supports command names).
+    3. On Windows, check common LibreOffice install locations.
+
+    Returns the resolved path/command suitable for subprocess execution.
+    """
+    configured = (soffice_path or "").strip() or "soffice"
+
+    configured_path = Path(configured)
+    if configured_path.exists():
+        return str(configured_path)
+
+    resolved = shutil.which(configured)
+    if resolved:
+        return resolved
+
+    if os.name == "nt":
+        windows_candidates: list[Path] = []
+
+        # Machine-wide LibreOffice installs usually land under one of the
+        # Program Files roots; environment variables avoid hardcoding drive letters.
+        for env_name in ("ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"):
+            root = os.environ.get(env_name)
+            if root:
+                windows_candidates.append(Path(root) / "LibreOffice" / "program" / "soffice.exe")
+
+        # Common Chocolatey machine-wide layout.
+        chocolatey_install = os.environ.get("ChocolateyInstall") or r"C:\ProgramData\chocolatey"
+        windows_candidates.append(
+            Path(chocolatey_install) / "lib" / "libreoffice" / "tools" / "LibreOffice" / "program" / "soffice.exe"
+        )
+
+        # Keep fixed defaults as a fallback when env vars are absent.
+        windows_candidates.extend(
+            [
+                Path(r"C:\Program Files\LibreOffice\program\soffice.exe"),
+                Path(r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"),
+            ]
+        )
+
+        seen: set[str] = set()
+        for candidate in windows_candidates:
+            candidate_str = str(candidate)
+            folded = candidate_str.casefold()
+            if folded in seen:
+                continue
+            seen.add(folded)
+            if candidate.exists():
+                return candidate_str
+
+    return configured
+
+
 def _env_flag(name: str, default: bool = False) -> bool:
     """Read an environment variable as a boolean flag.
 
@@ -267,7 +324,7 @@ class OfficeConverter:
             Default conversion timeout in seconds used when ``convert()`` is
             called without an explicit ``timeout_s``.
         """
-        self.soffice_path = soffice_path
+        self.soffice_path = _resolve_soffice_path(soffice_path)
         self.default_timeout_s = default_timeout_s
 
     def convert(self, input_path: Path, target_ext: str, out_dir: Path, *, timeout_s: int | None = None) -> Path:

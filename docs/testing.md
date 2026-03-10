@@ -39,5 +39,6 @@ Run two desktop instances simultaneously with different `--log-file` values and 
 For a sample set of file hashes, compare outcomes against `archives_scraper` expectations:
 
 - Presence/shape of `file_contents`
+- Presence/shape of `file_date_mentions` when date extraction is enabled
 - Embedding fields populated when enabled
 - `file_content_failures` lifecycle (insert, increment attempts, clear on success)

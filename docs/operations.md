@@ -26,12 +26,14 @@ For stronger desktops and stable DB latency, increase `WRITE_BATCH_SIZE` first b
 
 - `ok`, `error`, and `no_extractor` counts per batch
 - Frequency of failure upserts in `file_content_failures`
+- Volume of `file_date_mentions` refreshes during normal scraping
 - Unexpected spikes in duplicate/retry behavior
 
 ## Failure Semantics
 
 - Extraction/embedding failures are persisted with stage and attempt count.
 - Successful content upsert clears existing failure rows for that file hash.
+- When date extraction is enabled, successful content upsert replaces any existing `file_date_mentions` rows for that file hash with the newly extracted set.
 - Known concurrency duplicates are absorbed by upsert behavior rather than treated as hard failures.
 
 ## Troubleshooting

@@ -90,6 +90,13 @@ load_dotenv(override=False)
     help="Enable/disable embedding generation",
 )
 @click.option(
+    "--date-extract/--no-date-extract",
+    "enable_date_extraction",
+    default=True,
+    show_default=True,
+    help="Enable/disable date mention extraction",
+)
+@click.option(
     "--embedder",
     type=click.Choice(["minilm"], case_sensitive=False),
     default="minilm",
@@ -152,6 +159,7 @@ def main(
     extensions: str | None,
     max_chars: int | None,
     enable_embedding: bool,
+    enable_date_extraction: bool,
     embedder: str,
     log_level: str,
     log_file: str | None,
@@ -212,6 +220,7 @@ def main(
         extra={
             "extensions": sorted(ext_set) if ext_set else "all",
             "max_chars": max_chars,
+            "enable_date_extraction": enable_date_extraction,
             "max_runtime_seconds": max_runtime_seconds,
             "limit": limit,
             "randomize": randomize,
@@ -278,6 +287,7 @@ def main(
             extensions=ext_set,
             max_chars=max_chars,
             enable_embedding=enable_embedding,
+            enable_date_extraction=enable_date_extraction,
             failure_retry_treshold=failure_retry_treshold,
             randomize=randomize,
             dry_run=dry_run,

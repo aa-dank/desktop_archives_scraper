@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
+from desktop_archives_scraper.text_extraction.basic_extraction import DateExtractor
 from desktop_archives_scraper.text_extraction.extraction_utils import (
     common_char_replacements,
     strip_diacritics,
@@ -230,6 +231,7 @@ def process_one_file(
     *,
     extractors_by_ext: dict[str, Any],
     embedder: Any,
+    date_extractor: DateExtractor | None,
     file_record: Any,
     now_fn: Callable[[], datetime] = utcnow,
     max_chars: int | None = None,
@@ -269,6 +271,7 @@ def process_one_file(
         "status": "error",
         "chars": 0,
         "duration_ms": 0,
+        "date_mentions": [],
     }
     current_stage = STAGE_EXTRACT
     file_path: Path | None = None
@@ -375,6 +378,31 @@ def process_one_file(
             return result
         
         result["chars"] = len(extracted_text)
+
+        if extracted_text.strip() and date_extractor is not None:
+            try:
+                date_counts: dict[Any, int] = {}
+                for mention_date in date_extractor(extracted_text):
+                    date_counts[mention_date] = date_counts.get(mention_date, 0) + 1
+
+                if date_counts:
+                    extraction_ts = now_fn()
+                    result["date_mentions"] = [
+                        {
+                            "file_hash": file_record.hash,
+                            "mention_date": mention_date,
+                            "mentions_count": mentions_count,
+                            "granularity": "day",
+                            "extractor": "regex-basic",
+                            "extracted_at": extraction_ts,
+                        }
+                        for mention_date, mentions_count in date_counts.items()
+                    ]
+            except Exception as exc:
+                logger.warning(
+                    "Date extraction failed, continuing without date mentions",
+                    extra={"file_id": file_record.id, "error": str(exc)},
+                )
         
         # Generate embedding if enabled
         current_stage = STAGE_EMBED
@@ -481,6 +509,7 @@ def run_worker(
     max_chars: int | None = None,
     backoff_seconds: float | None = None,
     enable_embedding: bool = True,
+    enable_date_extraction: bool = True,
     failure_retry_treshold: int | None = None,
     randomize: bool = False,
 ) -> int:
@@ -566,14 +595,19 @@ def run_worker(
             "max_runtime_seconds": max_runtime_seconds,
             "extensions": list(extensions) if extensions else None,
             "enable_embedding": enable_embedding,
+            "enable_date_extraction": enable_date_extraction,
             "failure_retry_treshold": failure_retry_treshold,
             "randomize": randomize,
         }
     )
+
+    date_extractor = DateExtractor() if enable_date_extraction else None
     
     total_processed = 0
     pending_content_rows: list[dict] = []
     pending_failure_rows: list[dict] = []
+    pending_date_mention_rows: list[dict] = []
+    pending_date_refresh_hashes: list[str] = []
     last_flush_ts = time.time()
     worker_start_ts = time.time()
 
@@ -588,25 +622,36 @@ def run_worker(
             time.sleep(duration)
 
     def flush_pending(force: bool = False) -> None:
-        nonlocal pending_content_rows, pending_failure_rows, last_flush_ts
+        nonlocal pending_content_rows, pending_failure_rows, pending_date_mention_rows, pending_date_refresh_hashes, last_flush_ts
 
-        has_pending = bool(pending_content_rows or pending_failure_rows)
+        has_pending = bool(
+            pending_content_rows
+            or pending_failure_rows
+            or pending_date_mention_rows
+            or pending_date_refresh_hashes
+        )
         if not has_pending:
             return
 
         now_ts = time.time()
         interval_elapsed = (now_ts - last_flush_ts) >= commit_interval_seconds
-        size_reached = (len(pending_content_rows) + len(pending_failure_rows)) >= write_batch_size
+        size_reached = (
+            len(pending_content_rows)
+            + len(pending_failure_rows)
+            + len(pending_date_mention_rows)
+        ) >= write_batch_size
 
         if not force and not interval_elapsed and not size_reached:
             return
 
         with session_factory() as flush_session:
             try:
-                content_count, failure_count, cleared_count = persist_processing_batch(
+                content_count, failure_count, cleared_count, date_mention_count = persist_processing_batch(
                     flush_session,
                     content_rows=pending_content_rows,
                     failure_rows=pending_failure_rows,
+                    date_mention_rows=pending_date_mention_rows,
+                    replace_date_mentions_for_hashes=pending_date_refresh_hashes,
                 )
             except Exception:
                 # Invalidate before the context manager exits so SQLAlchemy does
@@ -621,11 +666,15 @@ def run_worker(
                 "content_upserts": content_count,
                 "failure_upserts": failure_count,
                 "failure_rows_cleared": cleared_count,
+                "date_mention_upserts": date_mention_count,
+                "date_files_replaced": len(set(pending_date_refresh_hashes)),
             },
         )
 
         pending_content_rows = []
         pending_failure_rows = []
+        pending_date_mention_rows = []
+        pending_date_refresh_hashes = []
         last_flush_ts = now_ts
     
     try:
@@ -682,6 +731,7 @@ def run_worker(
                     result = process_one_file(
                         extractors_by_ext=registry,
                         embedder=embedder,
+                        date_extractor=date_extractor,
                         file_record=file_record,
                         max_chars=max_chars,
                         enable_embedding=enable_embedding,
@@ -693,10 +743,15 @@ def run_worker(
                     if not dry_run:
                         content_row = result.get("content")
                         failure = result.get("failure")
+                        date_mentions = result.get("date_mentions", [])
                         if content_row is not None:
                             pending_content_rows.append(content_row)
+                            if enable_date_extraction:
+                                pending_date_refresh_hashes.append(content_row["file_hash"])
                         if failure is not None:
                             pending_failure_rows.append(failure)
+                        if date_mentions:
+                            pending_date_mention_rows.extend(date_mentions)
                         flush_pending(force=False)
                 
                 logger.info(

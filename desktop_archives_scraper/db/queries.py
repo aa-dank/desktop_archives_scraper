@@ -6,7 +6,7 @@ from typing import Sequence
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from desktop_archives_scraper.db.models import FileContent, FileContentFailure
+from desktop_archives_scraper.db.models import FileContent, FileContentFailure, FileDateMention
 
 
 def persist_processing_batch(
@@ -14,7 +14,9 @@ def persist_processing_batch(
 	*,
 	content_rows: Sequence[dict],
 	failure_rows: Sequence[dict],
-) -> tuple[int, int, int]:
+	date_mention_rows: Sequence[dict],
+	replace_date_mentions_for_hashes: Sequence[str] = (),
+) -> tuple[int, int, int, int]:
 	"""
 	Persist a worker batch using idempotent upserts.
 
@@ -26,15 +28,21 @@ def persist_processing_batch(
 		Rows for `file_contents` upsert.
 	failure_rows:
 		Rows for `file_content_failures` upsert.
+	date_mention_rows:
+		Rows for `file_date_mentions` replace-all upsert.
+	replace_date_mentions_for_hashes:
+		Successful file hashes whose existing date mentions should be deleted
+		before inserting newly extracted rows.
 
 	Returns
 	-------
-	tuple[int, int, int]
-		(content_upserts, failure_upserts, failures_cleared)
+	tuple[int, int, int, int]
+		(content_upserts, failure_upserts, failures_cleared, date_mention_upserts)
 	"""
 	content_upserts = 0
 	failure_upserts = 0
 	failures_cleared = 0
+	date_mention_upserts = 0
 
 	if content_rows:
 		stmt = insert(FileContent).values(list(content_rows))
@@ -61,6 +69,31 @@ def persist_processing_batch(
 				.delete(synchronize_session=False)
 			)
 
+	replace_hashes = list(dict.fromkeys(replace_date_mentions_for_hashes))
+	if replace_hashes:
+		(
+			session.query(FileDateMention)
+			.filter(FileDateMention.file_hash.in_(replace_hashes))
+			.delete(synchronize_session=False)
+		)
+
+	if date_mention_rows:
+		stmt = insert(FileDateMention).values(list(date_mention_rows))
+		stmt = stmt.on_conflict_do_update(
+			index_elements=[
+				FileDateMention.file_hash,
+				FileDateMention.mention_date,
+				FileDateMention.granularity,
+			],
+			set_={
+				"mentions_count": stmt.excluded.mentions_count,
+				"extractor": stmt.excluded.extractor,
+				"extracted_at": stmt.excluded.extracted_at,
+			},
+		)
+		session.execute(stmt)
+		date_mention_upserts = len(date_mention_rows)
+
 	if failure_rows:
 		stmt = insert(FileContentFailure).values(list(failure_rows))
 		stmt = stmt.on_conflict_do_update(
@@ -76,7 +109,7 @@ def persist_processing_batch(
 		failure_upserts = len(failure_rows)
 
 	session.commit()
-	return content_upserts, failure_upserts, failures_cleared
+	return content_upserts, failure_upserts, failures_cleared, date_mention_upserts
 
 
 def failure_row(

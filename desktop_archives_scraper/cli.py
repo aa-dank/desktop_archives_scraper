@@ -8,10 +8,13 @@ no business logic. Supports both CLI arguments and environment variables
 for AWS/headless deployment.
 """
 
+import os
 import sys
 
 import click
 from dotenv import load_dotenv
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from desktop_archives_scraper.config import load_worker_config
@@ -263,13 +266,52 @@ def main(
     else:
         logger.info("Embedding disabled")
     
-    # Create database session factory
+    # Create database session factory — probe connectivity before any heavy work
     try:
         engine = get_db_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
         session_factory = sessionmaker(bind=engine)
         logger.info("Database connection established")
+    
+    # Handle common database connection errors with user-friendly messages
+    except OperationalError as e:
+        err_msg = str(e.orig).lower() if e.orig else str(e).lower()
+        if "password authentication failed" in err_msg:
+            logger.error(
+                "Database authentication failed: incorrect username or password.",
+                extra={"db_host": os.getenv("DB_HOST"), "db_user": os.getenv("DB_USERNAME")},
+            )
+        elif "database" in err_msg and "does not exist" in err_msg:
+            logger.error(
+                f"Database '{os.getenv('DB_NAME')}' does not exist on the server.",
+                extra={"db_host": os.getenv("DB_HOST"), "db_name": os.getenv("DB_NAME")},
+            )
+        elif "role" in err_msg and "does not exist" in err_msg:
+            logger.error(
+                f"Database role/user '{os.getenv('DB_USERNAME')}' does not exist.",
+                extra={"db_host": os.getenv("DB_HOST"), "db_user": os.getenv("DB_USERNAME")},
+            )
+        elif any(phrase in err_msg for phrase in ("could not connect", "connection refused", "no route to host")):
+            logger.error(
+                "Cannot reach the database server — check that the host and port are correct and the server is reachable.",
+                extra={"db_host": os.getenv("DB_HOST"), "db_port": os.getenv("DB_PORT")},
+            )
+        elif "timeout" in err_msg or "timed out" in err_msg:
+            logger.error(
+                "Connection to the database timed out — the host may be unreachable or behind a firewall.",
+                extra={"db_host": os.getenv("DB_HOST"), "db_port": os.getenv("DB_PORT")},
+            )
+        elif "name or service not known" in err_msg or "could not translate host" in err_msg:
+            logger.error(
+                f"Cannot resolve database hostname '{os.getenv('DB_HOST')}' — check DNS or the DB_HOST value.",
+                extra={"db_host": os.getenv("DB_HOST")},
+            )
+        else:
+            logger.error(f"Failed to connect to database: {e}")
+        sys.exit(2)
     except Exception as e:
-        logger.error(f"Failed to connect to database: {e}")
+        logger.error(f"Unexpected error while connecting to database: {e}")
         sys.exit(2)
     
     # Run worker

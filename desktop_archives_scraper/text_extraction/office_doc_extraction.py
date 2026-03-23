@@ -586,7 +586,6 @@ class WordFileTextExtractor(FileTextExtractor):
     file_extensions: List[str] = ["docx", "docm", "doc"]
     cleaner = MammothRawTextCleaner()
 
-    def __init__(
     def __init__(self, converter: OfficeConverter | None = None, max_output_chars: int = 5_000_000):
         """Initialise the extractor.
 

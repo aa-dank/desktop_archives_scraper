@@ -29,6 +29,7 @@ from desktop_archives_scraper.text_extraction.extraction_utils import (
 
 import numpy as np
 from sqlalchemy import or_
+import sqlalchemy.exc
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import func
 
@@ -644,21 +645,35 @@ def run_worker(
         if not force and not interval_elapsed and not size_reached:
             return
 
-        with session_factory() as flush_session:
+        max_flush_attempts = 3
+        for flush_attempt in range(max_flush_attempts):
             try:
-                content_count, failure_count, cleared_count, date_mention_count = persist_processing_batch(
-                    flush_session,
-                    content_rows=pending_content_rows,
-                    failure_rows=pending_failure_rows,
-                    date_mention_rows=pending_date_mention_rows,
-                    replace_date_mentions_for_hashes=pending_date_refresh_hashes,
-                )
-            except Exception:
-                # Invalidate before the context manager exits so SQLAlchemy does
-                # not attempt a ROLLBACK on a dead connection, which would raise a
-                # secondary exception and obscure the original error.
-                flush_session.invalidate()
-                raise
+                with session_factory() as flush_session:
+                    try:
+                        content_count, failure_count, cleared_count, date_mention_count = persist_processing_batch(
+                            flush_session,
+                            content_rows=pending_content_rows,
+                            failure_rows=pending_failure_rows,
+                            date_mention_rows=pending_date_mention_rows,
+                            replace_date_mentions_for_hashes=pending_date_refresh_hashes,
+                        )
+                    except Exception:
+                        # Invalidate before the context manager exits so SQLAlchemy does
+                        # not attempt a ROLLBACK on a dead connection, which would raise a
+                        # secondary exception and obscure the original error.
+                        flush_session.invalidate()
+                        raise
+                break  # success
+            except sqlalchemy.exc.OperationalError as e:
+                if flush_attempt < max_flush_attempts - 1:
+                    retry_delay = 2.0 * (2 ** flush_attempt)  # 2s, 4s
+                    logger.warning(
+                        f"DB connection error during flush, retrying in {retry_delay:.0f}s "
+                        f"(attempt {flush_attempt + 1}/{max_flush_attempts}): {e}"
+                    )
+                    time.sleep(retry_delay)
+                else:
+                    raise
 
         logger.info(
             "Flushed pending writes",

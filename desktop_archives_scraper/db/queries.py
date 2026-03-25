@@ -45,7 +45,10 @@ def persist_processing_batch(
 	date_mention_upserts = 0
 
 	if content_rows:
-		stmt = insert(FileContent).values(list(content_rows))
+		# Keep the last row for each file_hash so one INSERT statement never
+		# proposes duplicate conflict keys.
+		deduped_content_rows = list({row["file_hash"]: row for row in content_rows}.values())
+		stmt = insert(FileContent).values(deduped_content_rows)
 		stmt = stmt.on_conflict_do_update(
 			index_elements=[FileContent.file_hash],
 			set_={
@@ -59,9 +62,9 @@ def persist_processing_batch(
 			},
 		)
 		session.execute(stmt)
-		content_upserts = len(content_rows)
+		content_upserts = len(deduped_content_rows)
 
-		successful_hashes = [row["file_hash"] for row in content_rows]
+		successful_hashes = [row["file_hash"] for row in deduped_content_rows]
 		if successful_hashes:
 			failures_cleared = (
 				session.query(FileContentFailure)

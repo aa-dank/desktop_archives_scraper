@@ -138,6 +138,10 @@ if (-not (Test-Path $VenvDir)) {
                 # Fallback: use whatever python is on PATH.
                 & python -m venv $VenvDir
             }
+
+            if ($LASTEXITCODE -ne 0) {
+                throw "venv creation command exited with code $LASTEXITCODE"
+            }
         } catch {
             Write-Host "[update] ERROR: Failed to create virtual environment." -ForegroundColor Red
             Write-Host "         -> Ensure Python $PythonVersion is installed: choco install python" -ForegroundColor Red
@@ -156,17 +160,21 @@ if (-not (Test-Path $VenvPython)) {
 
 Write-Host "[update] Upgrading pip"
 & $VenvPython -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[update] ERROR: pip upgrade failed." -ForegroundColor Red
+    Write-Host "         -> pip exited with code: $LASTEXITCODE" -ForegroundColor Red
+    exit 1
+}
 
 $RequirementsPath = Join-Path $AppDir "requirements.txt"
 
 if (Test-Path $RequirementsPath) {
     Write-Host "[update] Installing Python dependencies from requirements.txt"
     Write-Host "         (This may take several minutes on first run due to torch/transformers)"
-    try {
-        & $VenvPython -m pip install -r $RequirementsPath
-    } catch {
+    & $VenvPython -m pip install -r $RequirementsPath
+    if ($LASTEXITCODE -ne 0) {
         Write-Host "[update] ERROR: pip install failed." -ForegroundColor Red
-        Write-Host "         -> Error detail: $_" -ForegroundColor Red
+        Write-Host "         -> pip exited with code: $LASTEXITCODE" -ForegroundColor Red
         Write-Host "         -> If a package fails to build, ensure Visual C++ Build Tools are installed." -ForegroundColor Red
         exit 1
     }
@@ -174,6 +182,11 @@ if (Test-Path $RequirementsPath) {
     # Fallback: install the package directly from its folder (uses pyproject.toml).
     Write-Host "[update] requirements.txt not found; installing package from source folder"
     & $VenvPython -m pip install $AppDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[update] ERROR: pip install from source folder failed." -ForegroundColor Red
+        Write-Host "         -> pip exited with code: $LASTEXITCODE" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Seed .env only on first-time setup. Never overwrite an existing .env because

@@ -718,13 +718,30 @@ def run_worker(
                     logger.info(f"Reached limit, processed {total_processed} files")
                     return 0
 
-                files = next_files_needing_content(
-                    session,
-                    extensions=extensions,
-                    limit=batch_limit,
-                    failure_retry_treshold=failure_retry_treshold,
-                    randomize=randomize,
-                )
+                max_fetch_attempts = 3
+                for fetch_attempt in range(max_fetch_attempts):
+                    try:
+                        files = next_files_needing_content(
+                            session,
+                            extensions=extensions,
+                            limit=batch_limit,
+                            failure_retry_treshold=failure_retry_treshold,
+                            randomize=randomize,
+                        )
+                        break
+                    except sqlalchemy.exc.OperationalError as e:
+                        # Drop any broken connection state so the next attempt can
+                        # check out a fresh connection from the pool.
+                        session.invalidate()
+                        if fetch_attempt < max_fetch_attempts - 1:
+                            retry_delay = 2.0 * (2 ** fetch_attempt)  # 2s, 4s
+                            logger.warning(
+                                f"DB connection error while fetching batch, retrying in {retry_delay:.0f}s "
+                                f"(attempt {fetch_attempt + 1}/{max_fetch_attempts}): {e}"
+                            )
+                            time.sleep(retry_delay)
+                            continue
+                        raise
                 
                 if not files:
                     if not dry_run:

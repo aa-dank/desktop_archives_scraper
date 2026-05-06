@@ -25,8 +25,15 @@ def get_db_engine():
         f"postgresql+psycopg://{os.getenv('DB_USERNAME')}:{os.getenv('DB_PASSWORD')}"
         f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
     )
+    connect_timeout = int(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "10"))
+    pool_recycle_seconds = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
     logger.info("Creating database engine")
-    return create_engine(conn_string)
+    return create_engine(
+        conn_string,
+        pool_pre_ping=True,
+        pool_recycle=pool_recycle_seconds,
+        connect_args={"connect_timeout": connect_timeout},
+    )
 
 
 def backup_database(backup_dir: str, compress: bool = False) -> str:

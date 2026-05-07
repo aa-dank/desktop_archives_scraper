@@ -425,8 +425,6 @@ def process_one_file(
             "updated_at": now_fn(),
             "minilm_model": None,
             "minilm_emb": None,
-            "mpnet_model": None,
-            "mpnet_emb": None,
         }
         
         if embedding_vector is not None:
@@ -442,9 +440,6 @@ def process_one_file(
             if dim == 384:  # MiniLM dimension
                 content_row["minilm_emb"] = embedding_vector
                 content_row["minilm_model"] = model_name
-            elif dim == 768:  # MPNet dimension
-                content_row["mpnet_emb"] = embedding_vector
-                content_row["mpnet_model"] = model_name
             else:
                 logger.warning(
                     f"Unknown embedding dimension",

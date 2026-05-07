@@ -55,8 +55,6 @@ def persist_processing_batch(
 				"source_text": stmt.excluded.source_text,
 				"minilm_model": stmt.excluded.minilm_model,
 				"minilm_emb": stmt.excluded.minilm_emb,
-				"mpnet_model": stmt.excluded.mpnet_model,
-				"mpnet_emb": stmt.excluded.mpnet_emb,
 				"updated_at": stmt.excluded.updated_at,
 				"text_length": stmt.excluded.text_length,
 			},

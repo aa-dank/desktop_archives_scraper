@@ -20,6 +20,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from desktop_archives_scraper.text_extraction.basic_extraction import DateExtractor
+from desktop_archives_scraper.text_extraction.chunking import TextChunker
 from desktop_archives_scraper.text_extraction.extraction_utils import (
     common_char_replacements,
     strip_diacritics,
@@ -446,6 +447,11 @@ def process_one_file(
                     extra={"file_id": file_record.id, "dimension": dim}
                 )
         result["content"] = content_row
+        result["fts_chunk_rows"] = TextChunker.build_chunk_rows(
+            file_hash=file_record.hash,
+            text=extracted_text,
+            chunked_at=content_row["updated_at"],
+        )
         
         logger.info(
             f"Successfully processed file",
@@ -601,6 +607,7 @@ def run_worker(
     
     total_processed = 0
     pending_content_rows: list[dict] = []
+    pending_fts_chunk_rows: list[dict] = []
     pending_failure_rows: list[dict] = []
     pending_date_mention_rows: list[dict] = []
     pending_date_refresh_hashes: list[str] = []
@@ -618,10 +625,11 @@ def run_worker(
             time.sleep(duration)
 
     def flush_pending(force: bool = False) -> None:
-        nonlocal pending_content_rows, pending_failure_rows, pending_date_mention_rows, pending_date_refresh_hashes, last_flush_ts
+        nonlocal pending_content_rows, pending_fts_chunk_rows, pending_failure_rows, pending_date_mention_rows, pending_date_refresh_hashes, last_flush_ts
 
         has_pending = bool(
             pending_content_rows
+            or pending_fts_chunk_rows
             or pending_failure_rows
             or pending_date_mention_rows
             or pending_date_refresh_hashes
@@ -645,9 +653,17 @@ def run_worker(
             try:
                 with session_factory() as flush_session:
                     try:
-                        content_count, failure_count, cleared_count, date_mention_count = persist_processing_batch(
+                        (
+                            content_count,
+                            failure_count,
+                            cleared_count,
+                            date_mention_count,
+                            fts_chunk_count,
+                            rebuilt_chunk_files,
+                        ) = persist_processing_batch(
                             flush_session,
                             content_rows=pending_content_rows,
+                            fts_chunk_rows=pending_fts_chunk_rows,
                             failure_rows=pending_failure_rows,
                             date_mention_rows=pending_date_mention_rows,
                             replace_date_mentions_for_hashes=pending_date_refresh_hashes,
@@ -678,10 +694,13 @@ def run_worker(
                 "failure_rows_cleared": cleared_count,
                 "date_mention_upserts": date_mention_count,
                 "date_files_replaced": len(set(pending_date_refresh_hashes)),
+                "fts_chunk_upserts": fts_chunk_count,
+                "fts_chunk_files_rebuilt": rebuilt_chunk_files,
             },
         )
 
         pending_content_rows = []
+        pending_fts_chunk_rows = []
         pending_failure_rows = []
         pending_date_mention_rows = []
         pending_date_refresh_hashes = []
@@ -769,10 +788,12 @@ def run_worker(
 
                     if not dry_run:
                         content_row = result.get("content")
+                        fts_chunk_rows = result.get("fts_chunk_rows", [])
                         failure = result.get("failure")
                         date_mentions = result.get("date_mentions", [])
                         if content_row is not None:
                             pending_content_rows.append(content_row)
+                            pending_fts_chunk_rows.extend(fts_chunk_rows)
                             if enable_date_extraction:
                                 pending_date_refresh_hashes.append(content_row["file_hash"])
                         if failure is not None:

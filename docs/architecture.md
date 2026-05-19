@@ -11,8 +11,9 @@
 3. Extraction pipeline copies each file to a temp path and runs extension-specific extraction.
 4. Optional date mention extraction runs against normalized `source_text`.
 5. Optional embedding generation (MiniLM).
-6. Results are buffered and flushed in batched DB upserts.
-7. Failures are upserted to `file_content_failures`; successful content writes clear failure rows and, when enabled, replace `file_date_mentions` for those hashes.
+6. Fixed-width 20,000-character FTS chunks are derived from the extracted text with the shared `TextChunker`.
+7. Results are buffered and flushed in batched DB upserts.
+8. Failures are upserted to `file_content_failures`; successful content writes clear failure rows, rebuild `file_content_fts_chunks`, and, when enabled, replace `file_date_mentions` for those hashes.
 
 ## Reuse Map
 
@@ -22,7 +23,7 @@
 | `desktop_archives_scraper/worker.py` | `archives_scraper/core/worker.py` + new | Same processing/failure model, with batched persistence orchestration. |
 | `desktop_archives_scraper/db/models.py` | `archives_scraper/db/models.py` | Canonical production table mapping. |
 | `desktop_archives_scraper/db/db.py` | `archives_scraper/db/db.py` | Engine/session baseline. |
-| `desktop_archives_scraper/db/queries.py` | new | Batch upsert helpers for `file_contents`, `file_content_failures`, and `file_date_mentions`. |
+| `desktop_archives_scraper/db/queries.py` | new | Batch upsert helpers for `file_contents`, `file_content_fts_chunks`, `file_content_failures`, and `file_date_mentions`. |
 | `desktop_archives_scraper/text_extraction/*` | `archives_scraper/text_extraction/*` | Robust extractors incl. large-file and subprocess guards. |
 | `desktop_archives_scraper/embedding/*` | `archives_scraper/embedding/*` | MiniLM embedder path parity. |
 | `desktop_archives_scraper/config.py` | new | Centralized runtime knob defaults from env. |

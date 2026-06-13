@@ -43,6 +43,29 @@ logger = logging.getLogger(__name__)
 STAGE_EXTRACT = "extract"
 STAGE_EMBED = "embed"
 
+
+def to_windows_extended_path(path: str | Path) -> str:
+    """
+    Convert a Windows path to extended-length form when needed.
+
+    This avoids MAX_PATH issues without requiring registry policy changes.
+    On non-Windows systems, returns the original path string.
+    """
+    raw = os.fspath(path)
+    if os.name != "nt":
+        return raw
+
+    # Already in extended-length form.
+    if raw.startswith("\\\\?\\"):
+        return raw
+
+    # UNC path: \\server\share\... -> \\?\UNC\server\share\...
+    if raw.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + raw.lstrip("\\")
+
+    # Drive path: C:\... -> \\?\C:\...
+    return "\\\\?\\" + raw
+
 def assemble_file_server_filepath(base_mount: str,
                                   server_dir: str,
                                   filename: str = None) -> Path:
@@ -346,7 +369,9 @@ def process_one_file(
         extracted_text = ""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_fp = os.path.join(temp_dir, os.path.basename(str(file_path)))
-            shutil.copyfile(str(file_path), temp_fp)
+            source_fp = to_windows_extended_path(file_path)
+            temp_target_fp = to_windows_extended_path(temp_fp)
+            shutil.copyfile(source_fp, temp_target_fp)
             extracted_text = extractor(temp_fp)
 
         if extracted_text:

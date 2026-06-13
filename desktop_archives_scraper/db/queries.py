@@ -6,17 +6,23 @@ from typing import Sequence
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from desktop_archives_scraper.db.models import FileContent, FileContentFailure, FileDateMention
+from desktop_archives_scraper.db.models import (
+	FileContent,
+	FileContentFailure,
+	FileContentFtsChunk,
+	FileDateMention,
+)
 
 
 def persist_processing_batch(
 	session: Session,
 	*,
 	content_rows: Sequence[dict],
+	fts_chunk_rows: Sequence[dict],
 	failure_rows: Sequence[dict],
 	date_mention_rows: Sequence[dict],
 	replace_date_mentions_for_hashes: Sequence[str] = (),
-) -> tuple[int, int, int, int]:
+) -> tuple[int, int, int, int, int, int]:
 	"""
 	Persist a worker batch using idempotent upserts.
 
@@ -26,6 +32,8 @@ def persist_processing_batch(
 		Active SQLAlchemy session.
 	content_rows:
 		Rows for `file_contents` upsert.
+	fts_chunk_rows:
+		Rows for `file_content_fts_chunks` rebuild.
 	failure_rows:
 		Rows for `file_content_failures` upsert.
 	date_mention_rows:
@@ -36,13 +44,22 @@ def persist_processing_batch(
 
 	Returns
 	-------
-	tuple[int, int, int, int]
-		(content_upserts, failure_upserts, failures_cleared, date_mention_upserts)
+	tuple[int, int, int, int, int, int]
+		(
+			content_upserts,
+			failure_upserts,
+			failures_cleared,
+			date_mention_upserts,
+			fts_chunk_upserts,
+			fts_chunk_files_rebuilt,
+		)
 	"""
 	content_upserts = 0
 	failure_upserts = 0
 	failures_cleared = 0
 	date_mention_upserts = 0
+	fts_chunk_upserts = 0
+	fts_chunk_files_rebuilt = 0
 
 	if content_rows:
 		# Keep the last row for each file_hash so one INSERT statement never
@@ -64,11 +81,43 @@ def persist_processing_batch(
 
 		successful_hashes = [row["file_hash"] for row in deduped_content_rows]
 		if successful_hashes:
+			successful_hash_set = set(successful_hashes)
 			failures_cleared = (
 				session.query(FileContentFailure)
 				.filter(FileContentFailure.file_hash.in_(successful_hashes))
 				.delete(synchronize_session=False)
 			)
+			fts_chunk_files_rebuilt = len(successful_hashes)
+			(
+				session.query(FileContentFtsChunk)
+				.filter(FileContentFtsChunk.file_hash.in_(successful_hashes))
+				.delete(synchronize_session=False)
+			)
+
+			chunk_sets_by_hash: dict[str, dict] = {}
+			for row in fts_chunk_rows:
+				file_hash = row["file_hash"]
+				chunked_at = row["chunked_at"]
+				chunk_index = row["chunk_index"]
+				existing_chunk_set = chunk_sets_by_hash.get(file_hash)
+				if existing_chunk_set is None or chunked_at > existing_chunk_set["chunked_at"]:
+					chunk_sets_by_hash[file_hash] = {
+						"chunked_at": chunked_at,
+						"rows_by_index": {chunk_index: row},
+					}
+					continue
+				if chunked_at == existing_chunk_set["chunked_at"]:
+					existing_chunk_set["rows_by_index"][chunk_index] = row
+
+			deduped_chunk_rows = [
+				row
+				for file_hash, chunk_set in chunk_sets_by_hash.items()
+				if file_hash in successful_hash_set
+				for _, row in sorted(chunk_set["rows_by_index"].items())
+			]
+			if deduped_chunk_rows:
+				session.execute(insert(FileContentFtsChunk).values(deduped_chunk_rows))
+				fts_chunk_upserts = len(deduped_chunk_rows)
 
 	replace_hashes = list(dict.fromkeys(replace_date_mentions_for_hashes))
 	if replace_hashes:
@@ -110,7 +159,14 @@ def persist_processing_batch(
 		failure_upserts = len(failure_rows)
 
 	session.commit()
-	return content_upserts, failure_upserts, failures_cleared, date_mention_upserts
+	return (
+		content_upserts,
+		failure_upserts,
+		failures_cleared,
+		date_mention_upserts,
+		fts_chunk_upserts,
+		fts_chunk_files_rebuilt,
+	)
 
 
 def failure_row(

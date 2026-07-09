@@ -149,6 +149,12 @@ load_dotenv(override=False)
     help="Randomize database file selection order for scraping",
 )
 @click.option(
+    "--hashes",
+    type=str,
+    envvar="TARGET_HASHES",
+    help="Comma-separated list of exact file hashes to target for scraping",
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     help="Perform dry run without persisting changes",
@@ -170,6 +176,7 @@ def main(
     max_runtime_seconds: float | None,
     failure_retry_treshold: int | None,
     randomize: bool,
+    hashes: str | None,
     dry_run: bool,
 ) -> None:
     """
@@ -316,6 +323,10 @@ def main(
     
     # Run worker
     try:
+        target_hashes_set = None
+        if hashes:
+            target_hashes_set = {h.strip() for h in hashes.split(",") if h.strip()}
+
         exit_code = run_worker(
             session_factory=session_factory,
             extractors=extractors,
@@ -332,6 +343,7 @@ def main(
             enable_date_extraction=enable_date_extraction,
             failure_retry_treshold=failure_retry_treshold,
             randomize=randomize,
+            target_hashes=target_hashes_set,
             dry_run=dry_run,
         )
         

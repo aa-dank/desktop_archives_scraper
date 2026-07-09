@@ -181,6 +181,7 @@ def next_files_needing_content(
     limit: int = 10,
     failure_retry_treshold: int | None = None,
     randomize: bool = False,
+    target_hashes: set[str] | None = None,
 ) -> list:
     """
     Fetch the next batch of files needing content extraction.
@@ -203,6 +204,8 @@ def next_files_needing_content(
         any failure record.
     randomize : bool, default=False
         If True, randomize file order before applying limit.
+    target_hashes : set[str] | None, default=None
+        If provided, only return files whose hash is in this set.
     
     Returns
     -------
@@ -236,6 +239,10 @@ def next_files_needing_content(
                 FileContentFailure.attempts < failure_retry_treshold,
             )
         )
+        
+    # Filter by specific hashes if provided
+    if target_hashes:
+        query = query.filter(File.hash.in_(target_hashes))
     
     if randomize:
         query = query.order_by(func.random())
@@ -539,6 +546,7 @@ def run_worker(
     enable_date_extraction: bool = True,
     failure_retry_treshold: int | None = None,
     randomize: bool = False,
+    target_hashes: set[str] | None = None,
 ) -> int:
     """
     Main worker execution loop.
@@ -575,6 +583,8 @@ def run_worker(
         previously failed.
     randomize : bool, default=False
         If True, randomize file retrieval order each batch.
+    target_hashes : set[str] | None, default=None
+        If provided, only process files matching these hashes.
     
     Returns
     -------
@@ -625,6 +635,7 @@ def run_worker(
             "enable_date_extraction": enable_date_extraction,
             "failure_retry_treshold": failure_retry_treshold,
             "randomize": randomize,
+            "target_hashes": list(target_hashes) if target_hashes else None,
         }
     )
 
@@ -766,6 +777,7 @@ def run_worker(
                             limit=batch_limit,
                             failure_retry_treshold=failure_retry_treshold,
                             randomize=randomize,
+                            target_hashes=target_hashes,
                         )
                         break
                     except sqlalchemy.exc.OperationalError as e:

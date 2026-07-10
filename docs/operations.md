@@ -30,6 +30,11 @@ For stronger desktops and stable DB latency, increase `WRITE_BATCH_SIZE` first b
 - Volume of `file_date_mentions` refreshes during normal scraping
 - Unexpected spikes in duplicate/retry behavior
 
+## Subsystem Resilience
+
+- The worker has built-in connection retry logic for tracking broken DB connections (`sqlalchemy.exc.OperationalError`). If DB connection is briefly lost, the session connection drops, wait exponentially to reconnect up to 3 times before failing the run.
+- Tuning DB engine pool behavior via `DB_CONNECT_TIMEOUT_SECONDS` and `DB_POOL_RECYCLE_SECONDS` provides further flexibility when deployed in restrictive network configurations.
+
 ## Failure Semantics
 
 - Extraction/embedding failures are persisted with stage and attempt count.
@@ -40,7 +45,8 @@ For stronger desktops and stable DB latency, increase `WRITE_BATCH_SIZE` first b
 
 ## Troubleshooting
 
-- Path issues: verify `FILE_SERVER_MOUNT` maps to the same server root semantics as `file_locations.file_server_directories`.
+- Path issues: verify `FILE_SERVER_MOUNT` maps to the same server root semantics as `file_locations.file_server_directories`. Windows extended-length paths (`\\?\`) are natively handled by the worker to bypass the 260-character `MAX_PATH` limitation.
+- Targeting specific files: Use `--hashes` CLI flag or `TARGET_HASHES` env var to limit processing to specific file hashes. Helpful for re-processing failed files. If targeting already-processed files, delete them from `file_contents` first.
 - Tesseract issues: verify `C:\Program Files\Tesseract-OCR\tesseract.exe` exists, or set `TESSERACT_CMD` to the real executable path.
 - OCR crashes: tune extractor `*_SUBPROCESS_*` and memory knobs.
 - Slow writes: increase `WRITE_BATCH_SIZE` and/or `COMMIT_INTERVAL_SECONDS` carefully.

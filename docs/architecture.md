@@ -8,7 +8,7 @@
 
 1. CLI initializes logging, extractors, embedder, and DB session factory.
 2. Worker polls `files`/`file_locations` for records missing `file_contents`.
-3. Extraction pipeline copies each file to a temp path and runs extension-specific extraction.
+3. Extraction pipeline copies each file to a temp path and runs extension-specific extraction. Supports Windows extended-length paths (`\\?\`) natively to bypass `MAX_PATH` limitations.
 4. Optional date mention extraction runs against normalized `source_text`.
 5. Optional embedding generation (MiniLM).
 6. Fixed-width 20,000-character FTS chunks are derived from the extracted text with the shared `TextChunker`.
@@ -24,7 +24,7 @@
 | `desktop_archives_scraper/db/models.py` | `archives_scraper/db/models.py` | Canonical production table mapping. |
 | `desktop_archives_scraper/db/db.py` | `archives_scraper/db/db.py` | Engine/session baseline. |
 | `desktop_archives_scraper/db/queries.py` | new | Batch upsert helpers for `file_contents`, `file_content_fts_chunks`, `file_content_failures`, and `file_date_mentions`. |
-| `desktop_archives_scraper/text_extraction/*` | `archives_scraper/text_extraction/*` | Robust extractors incl. large-file and subprocess guards. |
+| `desktop_archives_scraper/text_extraction/*` | `archives_scraper/text_extraction/*` | Robust extractors incl. large-file, subprocess guards, and `extract-msg` based `.msg` extraction. |
 | `desktop_archives_scraper/embedding/*` | `archives_scraper/embedding/*` | MiniLM embedder path parity. |
 | `desktop_archives_scraper/config.py` | new | Centralized runtime knob defaults from env. |
 

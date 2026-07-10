@@ -46,7 +46,7 @@ For stronger desktops and stable DB latency, increase `WRITE_BATCH_SIZE` first b
 ## Troubleshooting
 
 - Path issues: verify `FILE_SERVER_MOUNT` maps to the same server root semantics as `file_locations.file_server_directories`. Windows extended-length paths (`\\?\`) are natively handled by the worker to bypass the 260-character `MAX_PATH` limitation.
-- Targeting specific files: Use `--hashes` CLI flag or `TARGET_HASHES` env var to limit processing to specific file hashes. Helpful for re-processing failed files. If targeting already-processed files, delete them from `file_contents` first.
+- Targeting specific files: Use `--hashes` CLI flag or `TARGET_HASHES` env var to limit processing to specific file hashes. Helpful for re-processing failed files. This puts the worker in targeted mode, so it logs the target set and exits once no targeted hashes remain eligible for processing instead of continuing normal polling. If targeting already-processed files, delete them from `file_contents` first.
 - Tesseract issues: verify `C:\Program Files\Tesseract-OCR\tesseract.exe` exists, or set `TESSERACT_CMD` to the real executable path.
 - OCR crashes: tune extractor `*_SUBPROCESS_*` and memory knobs.
 - Slow writes: increase `WRITE_BATCH_SIZE` and/or `COMMIT_INTERVAL_SECONDS` carefully.

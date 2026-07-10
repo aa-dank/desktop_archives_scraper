@@ -128,7 +128,22 @@ def persist_processing_batch(
 		)
 
 	if date_mention_rows:
-		stmt = insert(FileDateMention).values(list(date_mention_rows))
+		# Multiple file records can refer to the same content hash. Their
+		# extraction results may therefore contribute the same date mention to a
+		# single flush. PostgreSQL cannot apply an ON CONFLICT update twice to
+		# the same target row within one INSERT, so retain the latest result for
+		# each primary-key tuple before issuing the upsert.
+		deduped_date_mention_rows = list(
+			{
+				(
+					row["file_hash"],
+					row["mention_date"],
+					row["granularity"],
+				): row
+				for row in date_mention_rows
+			}.values()
+		)
+		stmt = insert(FileDateMention).values(deduped_date_mention_rows)
 		stmt = stmt.on_conflict_do_update(
 			index_elements=[
 				FileDateMention.file_hash,
@@ -142,7 +157,7 @@ def persist_processing_batch(
 			},
 		)
 		session.execute(stmt)
-		date_mention_upserts = len(date_mention_rows)
+		date_mention_upserts = len(deduped_date_mention_rows)
 
 	if failure_rows:
 		stmt = insert(FileContentFailure).values(list(failure_rows))

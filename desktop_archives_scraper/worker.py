@@ -591,6 +591,8 @@ def run_worker(
     int
         Exit code: 0 (clean), 2 (config error), 3 (runtime failure)
     """
+    targeted_mode = bool(target_hashes)
+
     # Validate configuration
     if not extractors:
         logger.error("No extractors provided")
@@ -624,6 +626,7 @@ def run_worker(
     logger.info(
         f"Worker starting",
         extra={
+            "mode": "targeted" if targeted_mode else "polling",
             "poll_seconds": poll_seconds,
             "poll_batch_size": poll_batch_size,
             "write_batch_size": write_batch_size,
@@ -638,6 +641,15 @@ def run_worker(
             "target_hashes": list(target_hashes) if target_hashes else None,
         }
     )
+
+    if targeted_mode:
+        logger.info(
+            "Targeted mode enabled; worker will stop after the requested hashes are exhausted",
+            extra={
+                "target_hash_count": len(target_hashes),
+                "target_hashes": sorted(target_hashes),
+            },
+        )
 
     date_extractor = DateExtractor() if enable_date_extraction else None
     
@@ -797,6 +809,17 @@ def run_worker(
                 if not files:
                     if not dry_run:
                         flush_pending(force=True)
+
+                    if targeted_mode:
+                        logger.info(
+                            "No remaining targeted files need processing; exiting targeted mode",
+                            extra={
+                                "target_hash_count": len(target_hashes),
+                                "total_processed": total_processed,
+                            },
+                        )
+                        return 0
+
                     logger.info("No files needing processing")
                     if limit is not None:
                         logger.info(f"Exiting after processing {total_processed} files (limit reached or no work)")
@@ -806,7 +829,13 @@ def run_worker(
                     _capped_sleep(idle_sleep_seconds)
                     continue
                 
-                logger.info(f"Processing batch of {len(files)} files")
+                if targeted_mode:
+                    logger.info(
+                        f"Processing targeted batch of {len(files)} files",
+                        extra={"target_hash_count": len(target_hashes)},
+                    )
+                else:
+                    logger.info(f"Processing batch of {len(files)} files")
                 
                 # Process each file
                 batch_results = {"ok": 0, "no_extractor": 0, "error": 0}

@@ -135,7 +135,7 @@ gswin64c --version
 - `COMMIT_INTERVAL_SECONDS`: max seconds before forced flush of pending writes (default `5.0`)
 - `POLL_SECONDS`: sleep between loops (default `5.0`)
 - `MAX_RUNTIME_SECONDS`: wall-clock seconds after which the worker exits cleanly. Any in-progress file (including OCR) finishes first; pending DB writes are flushed before exit. Poll/idle sleeps are automatically capped to the remaining budget so overshoot is bounded to at most one file's processing time.
-- `TARGET_HASHES`: Comma-separated list of exact file hashes to target for scraping (via `--hashes` or env var). If targeting already-processed files, delete them from `file_contents` first.
+- `TARGET_HASHES`: Comma-separated list of exact file hashes to target for scraping (via `--hashes` or env var). When set, the worker runs in targeted mode and exits once those hashes are exhausted instead of continuing to poll. If targeting already-processed files, delete them from `file_contents` first.
 
 These can be set with env vars or CLI options (`--max-runtime-seconds`, etc.).
 

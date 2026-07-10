@@ -29,6 +29,7 @@
 - `FAILURE_RETRY_TRESHOLD` (int; include failed files only when attempts are below this value)
 - `RANDOMIZE` (`true`/`false`)
 - `LOG_LEVEL`, `LOG_FILE`, `JSON_LOGS`
+- `TESSERACT_CMD` (optional full path to the real `tesseract.exe`; used by image OCR and PDF OCR fallback)
 
 ## Extraction-Specific Optional Variables
 

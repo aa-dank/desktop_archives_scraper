@@ -69,6 +69,9 @@ uv --version
 tesseract --version
 ```
 
+The scraper checks for Tesseract in this order: explicit extractor configuration, `TESSERACT_CMD`, `C:\Program Files\Tesseract-OCR\tesseract.exe`, then `PATH`.
+The resolved executable is applied to both image OCR and PDF OCR fallback through `ocrmypdf`.
+
 If you prefer not to modify `PATH`, set the `TESSERACT_CMD` environment variable instead:
 
 ```powershell

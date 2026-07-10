@@ -5,7 +5,7 @@ import sys
 
 import ocrmypdf
 
-from .extraction_utils import SubprocessUtils
+from .extraction_utils import SubprocessUtils, configure_tesseract
 
 
 def _parse_params(params_json_arg: str) -> dict:
@@ -32,6 +32,7 @@ def main() -> int:
             raise ValueError("--params-json must decode to a JSON object")
 
         SubprocessUtils.apply_memory_limit(args.mem_mb, stderr=sys.stderr)
+        configure_tesseract()
         ocrmypdf.ocr(args.input, args.output, **ocr_params)
         return 0
     except Exception as exc:

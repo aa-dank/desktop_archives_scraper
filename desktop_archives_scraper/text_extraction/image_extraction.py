@@ -26,7 +26,7 @@ IMAGE_OCR_SUBPROCESS_MEM_MB = int(_IMAGE_OCR_SUBPROCESS_MEM_MB_RAW) if _IMAGE_OC
 IMAGE_OCR_SUBPROCESS_STDERR_MAX_BYTES = 8192
 
 from .basic_extraction import FileTextExtractor
-from .extraction_utils import ImageOCRUtils, OCRUtils
+from .extraction_utils import ImageOCRUtils, OCRUtils, configure_tesseract
 
 
 class ImageTextExtractor(FileTextExtractor):
@@ -68,8 +68,8 @@ class ImageTextExtractor(FileTextExtractor):
             DPI to use for images without embedded DPI info.
         """
         super().__init__()
-        if tesseract_cmd:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        tesseract_cmd = configure_tesseract(tesseract_cmd)
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         self.tesseract_cmd = tesseract_cmd
         self.lang = lang
         self.psm = psm

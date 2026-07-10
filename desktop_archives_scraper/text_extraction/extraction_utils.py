@@ -4,6 +4,7 @@
 import logging
 import os
 import re
+import shutil
 import sys
 import warnings
 from contextlib import contextmanager
@@ -15,6 +16,25 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def configure_tesseract(tesseract_cmd: str | None = None) -> str:
+    default_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+    for candidate in (tesseract_cmd, os.getenv("TESSERACT_CMD"), default_cmd, shutil.which("tesseract")):
+        if candidate and Path(candidate).is_file():
+            exe = str(Path(candidate))
+            exe_dir = str(Path(exe).parent)
+            os.environ["TESSERACT_CMD"] = exe
+            path_entries = os.environ.get("PATH", "").split(os.pathsep)
+            if exe_dir.casefold() not in {entry.casefold() for entry in path_entries}:
+                os.environ["PATH"] = exe_dir + os.pathsep + os.environ.get("PATH", "")
+            return exe
+
+    raise RuntimeError(
+        "Tesseract executable not found. Install Tesseract at "
+        f"{default_cmd}, add the real tesseract.exe to PATH, or set TESSERACT_CMD."
+    )
 
 
 def compute_max_image_pixels() -> int:

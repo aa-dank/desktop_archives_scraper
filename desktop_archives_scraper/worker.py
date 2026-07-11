@@ -366,10 +366,11 @@ def process_one_file(
         
         # Extract text
         logger.info(
-            f"Extracting text from file",
+            "Extracting text from server path: %s",
+            file_path,
             extra={
                 "file_id": file_record.id,
-                "path": str(file_path),
+                "server_path": str(file_path),
                 "ext": ext,
             }
         )
@@ -500,7 +501,8 @@ def process_one_file(
         
     except Exception as e:
         logger.exception(
-            f"Error processing file",
+            "Error processing file at server path: %s",
+            file_path if file_path is not None else "unavailable",
             extra={
                 "file_id": file_record.id,
                 "error": str(e),
@@ -877,6 +879,12 @@ def run_worker(
                         "errors": batch_results["error"],
                     }
                 )
+
+                # Targeted runs should persist each completed batch before the
+                # next selection query. Otherwise a small target set can be
+                # selected again while its successful results are still queued.
+                if targeted_mode and not dry_run:
+                    flush_pending(force=True)
                 
                 if limit is not None and total_processed >= limit:
                     if not dry_run:

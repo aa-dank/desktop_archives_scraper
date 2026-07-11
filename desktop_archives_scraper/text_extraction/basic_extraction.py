@@ -63,7 +63,7 @@ class TextFileTextExtractor(FileTextExtractor):
     basic error handling.
     """
     # Extensions are lowercase, no leading dot (as per spec)
-    file_extensions = ['txt', 'md', 'log', 'csv', 'json', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf']
+    file_extensions = ['txt', 'md', 'log', 'csv', 'json', 'js', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf']
     
     def __init__(self):
         super().__init__()

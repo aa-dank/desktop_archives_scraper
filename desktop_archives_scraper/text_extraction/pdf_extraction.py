@@ -270,6 +270,7 @@ class PDFTextExtractor(FileTextExtractor):
         ocr_params: dict,
         file_identifier: str,
         chunk_page_range: str,
+        total_pages: int,
         timeout_s: int = OCR_SUBPROCESS_TIMEOUT_S,
         mem_mb: Optional[int] = OCR_SUBPROCESS_MEM_MB,
     ) -> None:
@@ -290,9 +291,10 @@ class PDFTextExtractor(FileTextExtractor):
             cmd.extend(["--mem-mb", str(mem_mb)])
 
         logger.info(
-            "OCR subprocess invoke: file=%s page_range=%s timeout_s=%s mem_mb=%s",
+            "OCR subprocess invoke: file=%s page_range=%s total_pages=%s timeout_s=%s mem_mb=%s",
             file_identifier,
             chunk_page_range,
+            total_pages,
             timeout_s,
             mem_mb if mem_mb is not None else "unset",
         )
@@ -337,7 +339,12 @@ class PDFTextExtractor(FileTextExtractor):
             )
     
     @staticmethod
-    def extract_text_with_ocr(pdf_path: Union[str, Path], ocr_params: dict, chunk_size: int = 0) -> str:
+    def extract_text_with_ocr(
+        pdf_path: Union[str, Path],
+        ocr_params: dict,
+        chunk_size: int = 0,
+        total_pages: int | None = None,
+    ) -> str:
         """
         Perform OCR on a PDF file and return the extracted text.
         
@@ -373,6 +380,10 @@ class PDFTextExtractor(FileTextExtractor):
         logger.debug(f"Starting OCR extraction for {input_pdf_path} with params: {ocr_params}, chunk_size: {chunk_size}")
         if not input_pdf_path.exists():
             raise FileNotFoundError(f"Input PDF file not found for OCR operation: {input_pdf_path}")
+
+        if total_pages is None:
+            with fitz.open(input_pdf_path) as document:
+                total_pages = document.page_count
         
         # Non-chunked processing (original behavior)
         if chunk_size <= 0:
@@ -388,6 +399,7 @@ class PDFTextExtractor(FileTextExtractor):
                     ocr_params=params,
                     file_identifier=input_pdf_path.name,
                     chunk_page_range="full-document",
+                    total_pages=total_pages,
                 )
                 logger.debug(f"OCR completed, reading text from generated PDF")
 
@@ -430,6 +442,7 @@ class PDFTextExtractor(FileTextExtractor):
                             ocr_params=params,
                             file_identifier=input_pdf_path.name,
                             chunk_page_range=f"{start_page + 1}-{end_page}",
+                            total_pages=total_pages,
                         )
 
                         with fitz.open(chunk_output) as ocr_doc:
@@ -478,7 +491,11 @@ class PDFTextExtractor(FileTextExtractor):
             logger.debug(f"Extracted text length {len(pdf_text)}.")
             return pdf_text
         
-        logger.info(f"OCR needed for document: {pdf_document.name}")
+        logger.info(
+            "OCR needed for document: %s (total_pages=%d)",
+            pdf_document.name,
+            pdf_document.page_count,
+        )
         ocr_params = self.ocr_params.copy()
 
         # Large-format pages can trigger expensive rasterization paths when doing
@@ -511,11 +528,18 @@ class PDFTextExtractor(FileTextExtractor):
         chunk_size = 0
         if pdf_document.has_large_format or pdf_document.page_count > 20:
             chunk_size = 1 if pdf_document.has_large_format else 5
-            logger.info(f"Processing PDF in chunks of {chunk_size} pages to reduce memory usage")
+            logger.info(
+                "Processing PDF OCR in chunks: total_pages=%d chunk_size=%d",
+                pdf_document.page_count,
+                chunk_size,
+            )
 
-        pdf_text = self.extract_text_with_ocr(pdf_path=pdf_document.path,
-                                              ocr_params=ocr_params,
-                                              chunk_size=chunk_size)
+        pdf_text = self.extract_text_with_ocr(
+            pdf_path=pdf_document.path,
+            ocr_params=ocr_params,
+            chunk_size=chunk_size,
+            total_pages=pdf_document.page_count,
+        )
 
         if len((pdf_text or "").strip()) < self.ocr_min_text_chars:
             raise TextExtractionError(

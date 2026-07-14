@@ -195,6 +195,12 @@ def main(
     
     logger = get_logger(__name__)
     defaults = load_worker_config()
+    app_version = os.getenv("SCRAPER_APP_VERSION")
+
+    if app_version:
+        logger.info("Application version", extra={"app_version": app_version})
+    else:
+        logger.info("Application version unavailable")
 
     resolved_poll_seconds = defaults.poll_seconds if poll_seconds is None else poll_seconds
     resolved_poll_batch_size = defaults.poll_batch_size if poll_batch_size is None else max(poll_batch_size, 1)

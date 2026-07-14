@@ -113,6 +113,38 @@ function Import-EnvFile {
     }
 }
 
+function Get-AppVersionFromPyproject {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PyprojectPath
+    )
+
+    if (-not (Test-Path $PyprojectPath)) {
+        return $null
+    }
+
+    $inProjectSection = $false
+
+    foreach ($rawLine in (Get-Content $PyprojectPath)) {
+        $line = $rawLine.Trim()
+
+        if (-not $line -or $line.StartsWith("#")) {
+            continue
+        }
+
+        if ($line -match '^\[(.+)\]$') {
+            $inProjectSection = ($Matches[1] -eq "project")
+            continue
+        }
+
+        if ($inProjectSection -and $line -match '^version\s*=\s*["'']([^"'']+)["'']\s*$') {
+            return $Matches[1]
+        }
+    }
+
+    return $null
+}
+
 # ---------------------------------------------------------------------------
 # Load configuration
 # ---------------------------------------------------------------------------
@@ -192,6 +224,18 @@ if ($runtimeHoursInput -and $runtimeHoursInput.Trim()) {
 }
 
 Set-Location $AppDir
+
+$PyprojectPath = Join-Path $AppDir "pyproject.toml"
+$appVersion = Get-AppVersionFromPyproject -PyprojectPath $PyprojectPath
+
+if ($appVersion) {
+    [System.Environment]::SetEnvironmentVariable("SCRAPER_APP_VERSION", $appVersion, "Process")
+    Write-Host "[run] App version: $appVersion"
+} else {
+    [System.Environment]::SetEnvironmentVariable("SCRAPER_APP_VERSION", $null, "Process")
+    Write-Host "[run] WARNING: Could not determine app version from: $PyprojectPath" -ForegroundColor Yellow
+}
+
 Write-Host "[run] Starting desktop_archives_scraper ..."
 
 # Invoke the CLI as a module so it picks up env vars set above.

@@ -127,6 +127,25 @@ Import-EnvFile -Path $DotEnvPath
 Write-Host "[run] Loading run parameters: $RunParamsPath"
 Import-EnvFile -Path $RunParamsPath
 
+# Use the BIOS serial to distinguish physical laptops even if their Windows
+# computer names are changed. Fall back to the computer name if unavailable.
+$hostName = $null
+try {
+    $hostName = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber
+    if ($hostName) {
+        $hostName = $hostName.Trim()
+    }
+} catch {
+    Write-Host "[run] Could not read BIOS serial; using computer name instead." -ForegroundColor Yellow
+}
+
+if (-not $hostName) {
+    $hostName = $env:COMPUTERNAME
+}
+
+[System.Environment]::SetEnvironmentVariable("SCRAPER_HOST_NAME", $hostName, "Process")
+Write-Host "[run] Source host identifier: $hostName"
+
 # ---------------------------------------------------------------------------
 # Validate critical env vars are present before launching
 # ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
-from desktop_archives_scraper.text_extraction.basic_extraction import DateExtractor
+from desktop_archives_scraper.text_extraction.basic_extraction import DateExtractor, FileTextExtractor
 from desktop_archives_scraper.text_extraction.chunking import TextChunker
 from desktop_archives_scraper.text_extraction.extraction_utils import (
     common_char_replacements,
@@ -334,9 +334,12 @@ def process_one_file(
                 stage=STAGE_EXTRACT,
                 error=error_msg,
                 failed_at=now_fn(),
+                source_metadata=FileTextExtractor.source_metadata(extraction_tool="none"),
             )
             result["duration_ms"] = int((time.time() - start_time) * 1000)
             return result
+
+        source_metadata = extractor.extraction_metadata_dict()
         
         # Get file path from first location
         if file_record.locations:
@@ -360,6 +363,7 @@ def process_one_file(
                 stage=STAGE_EXTRACT,
                 error=error_msg,
                 failed_at=now_fn(),
+                source_metadata=source_metadata,
             )
             result["duration_ms"] = int((time.time() - start_time) * 1000)
             return result
@@ -382,6 +386,8 @@ def process_one_file(
             temp_target_fp = to_windows_extended_path(temp_fp)
             shutil.copyfile(source_fp, temp_target_fp)
             extracted_text = extractor(temp_fp)
+
+        source_metadata = extractor.extraction_metadata_dict()
 
         if extracted_text:
             extracted_text = common_char_replacements(extracted_text)
@@ -407,6 +413,7 @@ def process_one_file(
                 stage=STAGE_EXTRACT,
                 error=error_msg,
                 failed_at=now_fn(),
+                source_metadata=source_metadata,
             )
             result["chars"] = len(extracted_text)
             result["duration_ms"] = int((time.time() - start_time) * 1000)
@@ -459,6 +466,7 @@ def process_one_file(
             "updated_at": now_fn(),
             "minilm_model": None,
             "minilm_emb": None,
+            "source_metadata": source_metadata,
         }
         
         if embedding_vector is not None:
@@ -522,6 +530,7 @@ def process_one_file(
             stage=current_stage,
             error=formatted_error[:500],
             failed_at=now_fn(),
+            source_metadata=(extractor.extraction_metadata_dict() if "extractor" in locals() else FileTextExtractor.source_metadata(extraction_tool="none")),
         )
         
         result["status"] = "error"
@@ -758,6 +767,7 @@ def run_worker(
     
     try:
         while True:
+            # Check for max runtime
             if max_runtime_seconds is not None:
                 elapsed = time.time() - worker_start_ts
                 if elapsed >= max_runtime_seconds:

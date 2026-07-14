@@ -305,7 +305,7 @@ wheels = [
 
 [[package]]
 name = "desktop-archives-scraper"
-version = "1.0.3"
+version = "1.0.4"
 source = { virtual = "." }
 dependencies = [
     { name = "beautifulsoup4" },

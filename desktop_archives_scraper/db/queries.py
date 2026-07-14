@@ -74,6 +74,7 @@ def persist_processing_batch(
 				"minilm_emb": stmt.excluded.minilm_emb,
 				"updated_at": stmt.excluded.updated_at,
 				"text_length": stmt.excluded.text_length,
+				"source_metadata": stmt.excluded.source_metadata,
 			},
 		)
 		session.execute(stmt)
@@ -168,6 +169,7 @@ def persist_processing_batch(
 				"error": stmt.excluded.error,
 				"attempts": FileContentFailure.attempts + 1,
 				"last_failed_at": stmt.excluded.last_failed_at,
+				"source_metadata": stmt.excluded.source_metadata,
 			},
 		)
 		session.execute(stmt)
@@ -190,6 +192,7 @@ def failure_row(
 	stage: str,
 	error: str,
 	failed_at: datetime,
+	source_metadata: dict,
 ) -> dict:
 	return {
 		"file_hash": file_hash,
@@ -197,4 +200,5 @@ def failure_row(
 		"error": error,
 		"attempts": 1,
 		"last_failed_at": failed_at,
+		"source_metadata": source_metadata,
 	}

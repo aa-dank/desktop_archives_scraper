@@ -496,6 +496,7 @@ class PDFTextExtractor(FileTextExtractor):
             pdf_document.name,
             pdf_document.page_count,
         )
+        self._last_involved_ocr = True
         ocr_params = self.ocr_params.copy()
 
         # Large-format pages can trigger expensive rasterization paths when doing
@@ -564,6 +565,8 @@ class PDFTextExtractor(FileTextExtractor):
             Normalized extracted text.
         """
         
+        self._last_involved_ocr = False
+
         # Initialize document handle and result container
         logger.debug(f"__call__: Starting extraction for file {pdf_filepath}")
         doc = None

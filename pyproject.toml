@@ -1,6 +1,6 @@
 [project]
 name = "desktop-archives-scraper"
-version = "1.0.3"
+version = "1.0.4"
 description = "Windows desktop ingestion worker for UCSC archives backlog, sharing production DB schema with archives_scraper"
 readme = "README.md"
 requires-python = ">=3.13"

@@ -12,7 +12,7 @@ from datetime import date
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from .extraction_utils import validate_file, strip_html
-from typing import List
+from typing import Any, List, Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,20 @@ class FileTextExtractor(ABC):
                 return tomllib.load(pyproject_file)["project"]["version"]
 
     @classmethod
-    def source_metadata(cls, *, extraction_tool: str, involved_ocr: bool = False) -> dict:
+    def source_metadata(
+        cls,
+        *,
+        extraction_tool: str,
+        involved_ocr: bool = False,
+        extraction_tool_details: Mapping[str, Any] | None = None,
+    ) -> dict:
         return {
             "host_name": os.environ.get("SCRAPER_HOST_NAME") or os.environ.get("COMPUTERNAME") or socket.gethostname(),
             "system_name": "desktop_archives_scraper",
             "system_version": cls._system_version(),
             "extraction_tool": extraction_tool,
             "ocr_extraction": involved_ocr,
+            "extraction_tool_details": dict(extraction_tool_details or {}),
         }
 
     def extraction_metadata_dict(self) -> dict:

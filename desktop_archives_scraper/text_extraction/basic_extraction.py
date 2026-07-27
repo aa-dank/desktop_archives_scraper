@@ -56,7 +56,11 @@ class FileTextExtractor(ABC):
         }
 
     def extraction_metadata_dict(self) -> dict:
-        return self.source_metadata(extraction_tool=self.__class__.__name__, involved_ocr=getattr(self, "_last_involved_ocr", False))
+        return self.source_metadata(
+            extraction_tool=self.__class__.__name__,
+            involved_ocr=getattr(self, "_last_involved_ocr", False),
+            extraction_tool_details=getattr(self, "_last_extraction_tool_details", {}),
+        )
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -183,6 +187,7 @@ class TikaTextExtractor(FileTextExtractor):
         self.tika_endpoint = f"{self.server_url}/tika"
         self.detect_endpoint = f"{self.server_url}/detect/stream"
         self.timeout = timeout
+        self._last_extraction_tool_details: dict[str, object] = {}
 
         # sanity check server is up
         r = httpx.get(self.tika_endpoint, headers={'Accept': 'text/plain'}, timeout=self.timeout)
@@ -201,6 +206,7 @@ class TikaTextExtractor(FileTextExtractor):
         return (r.text or '').strip()
 
     def __call__(self, path: str) -> str:
+        self._last_extraction_tool_details = {}
         p = validate_file(path)
         # Preflight: detect MIME
         mime = self._detect_mime(p)
@@ -208,6 +214,7 @@ class TikaTextExtractor(FileTextExtractor):
 
         # Fast-fail on clearly unknown/opaque types
         if not mime or mime == 'application/octet-stream':
+            self._last_extraction_tool_details = {"failure_kind": "unsupported_format"}
             raise TikaUnsupportedError(f"Tika can’t determine a usable MIME type for {p}")
 
         logger.info(f"Extracting text from {p} with Tika (MIME={mime})")
@@ -222,8 +229,10 @@ class TikaTextExtractor(FileTextExtractor):
 
         # Explicit handling of common outcomes
         if resp.status_code == 204:
+            self._last_extraction_tool_details = {"failure_kind": "no_recognized_text"}
             raise TikaNoContentError(f"Tika returned 204 No Content for {p}")
         if resp.status_code == 422:
+            self._last_extraction_tool_details = {"failure_kind": "unsupported_or_encrypted"}
             raise TikaUnsupportedError(f"Tika returned 422 (unsupported/encrypted) for {p}: {resp.text}")
 
         resp.raise_for_status()

@@ -430,7 +430,7 @@ class PDFTextExtractor(FileTextExtractor):
                         extracted_text = "".join(page.get_text() for page in doc)
             except Exception as exc:
                 details.update({
-                    "ocr_completeness": "none",
+                    "extraction_completeness": "none",
                     "ocr_page_batches_attempted": 1,
                     "ocr_page_batches_succeeded": 0,
                     "failed_page_ranges": [f"1-{total_pages}"],
@@ -439,7 +439,7 @@ class PDFTextExtractor(FileTextExtractor):
                 raise
 
             details.update({
-                "ocr_completeness": "complete",
+                "extraction_completeness": "complete",
                 "ocr_page_batches_attempted": 1,
                 "ocr_page_batches_succeeded": 1,
             })
@@ -507,7 +507,7 @@ class PDFTextExtractor(FileTextExtractor):
             completeness = "complete"
 
         details.update({
-            "ocr_completeness": completeness,
+            "extraction_completeness": completeness,
             "ocr_page_batches_attempted": chunks_attempted,
             "ocr_page_batches_succeeded": chunks_succeeded,
         })

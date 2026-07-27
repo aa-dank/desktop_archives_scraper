@@ -38,6 +38,7 @@ For stronger desktops and stable DB latency, increase `WRITE_BATCH_SIZE` first b
 ## Failure Semantics
 
 - Extraction/embedding failures are persisted with stage and attempt count.
+- PDFium bitmap-rendering failures are classified as `ocr_rasterization_failed` in failure metadata for targeted review.
 - Successful content upsert clears existing failure rows for that file hash.
 - Successful content upsert replaces existing `file_content_fts_chunks` rows for that file hash with a fresh chunk set derived from the latest extracted text.
 - When date extraction is enabled, successful content upsert replaces any existing `file_date_mentions` rows for that file hash with the newly extracted set.

@@ -261,6 +261,8 @@ class PDFTextExtractor(FileTextExtractor):
     def _ocr_failure_kind(error: Exception) -> str:
         """Classify only OCR failures with a clear, actionable remediation."""
         message = str(error).lower()
+        if "failed to fill bitmap rectangle" in message or "pypdfium" in message:
+            return "ocr_rasterization_failed"
         if any(marker in message for marker in ("max-image-mpixels", "max_image_mpixels", "pixel limit", "decompressionbomb")):
             return "image_pixel_limit"
         if "timed out" in message or "timeout" in message:

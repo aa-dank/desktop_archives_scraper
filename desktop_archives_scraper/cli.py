@@ -11,8 +11,14 @@ for AWS/headless deployment.
 import os
 import sys
 
-import click
 from dotenv import load_dotenv
+
+# Load environment variables before importing modules that snapshot OCR and
+# subprocess settings at import time. Existing process environment values keep
+# precedence over values from a local .env file.
+load_dotenv(override=False)
+
+import click
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
@@ -30,11 +36,6 @@ from desktop_archives_scraper.text_extraction.office_doc_extraction import (
 from desktop_archives_scraper.text_extraction.pdf_extraction import PDFTextExtractor
 from desktop_archives_scraper.text_extraction.web_extraction import EmailTextExtractor, HtmlTextExtractor
 from desktop_archives_scraper.worker import run_worker
-
-
-# Load environment variables early so Click options using envvar=... can
-# see values from a local .env file.
-load_dotenv(override=False)
 
 
 @click.command()

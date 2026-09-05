@@ -178,7 +178,7 @@ class Contract(Base):
     __tablename__ = 'contracts'
     id = Column(Integer, primary_key=True)
     fmp_id_primary = Column(Integer, unique=True)
-    contract_number = Column(Integer)
+    contract_number = Column(String)
     project_id = Column(Integer, ForeignKey('projects.id'))
     contract_date = Column(Date)
     ntp_start_date = Column(Date)
